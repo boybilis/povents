@@ -1,0 +1,22 @@
+<?php
+return [
+    'app_name' => 'POVents',
+    'base_url' => 'https://your-domain.com',
+    'db' => [
+        'host' => 'localhost',
+        'name' => 'u123456789_povents',
+        'user' => 'u123456789_povents',
+        'pass' => 'change-me',
+        'charset' => 'utf8mb4',
+    ],
+    'paymongo_secret_key' => 'sk_test_replace_me',
+    'paymongo_webhook_secret' => 'whsk_replace_me',
+    // Keep false on Hostinger. This is only for local development.
+    'local_payment_bypass' => false,
+    'plan_price_centavos' => 69900,
+    'plan_days' => 30,
+    'photo_retention_days' => 7,
+    'cron_secret' => 'replace-with-a-long-random-string',
+    'max_photos_per_session' => 5,
+    'max_upload_bytes' => 8 * 1024 * 1024,
+];

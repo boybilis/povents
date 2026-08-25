@@ -1,0 +1,11 @@
+# Local and production secrets
+config.php
+
+# Guest uploads stay on the web server, not in source control
+uploads/*
+!uploads/.htaccess
+
+# Local/editor files
+.DS_Store
+Thumbs.db
+*.log

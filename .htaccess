@@ -1,0 +1,15 @@
+Options -Indexes
+DirectoryIndex index.php
+
+<FilesMatch "^(config\.php|config\.example\.php|schema\.sql|migrate-v2\.sql)$">
+  Require all denied
+</FilesMatch>
+
+RewriteEngine On
+RewriteRule ^uploads/.*\.(php|phtml|phar)$ - [F,L,NC]
+
+<IfModule mod_headers.c>
+  <FilesMatch "\.(js|css)$">
+    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+  </FilesMatch>
+</IfModule>

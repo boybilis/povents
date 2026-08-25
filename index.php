@@ -1,0 +1,132 @@
+<?php
+declare(strict_types=1);
+session_start();
+require __DIR__ . '/lib.php';
+
+$page = $_GET['page'] ?? 'home';
+$action = $_GET['action'] ?? '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if ($action === 'upload') {
+        header('Content-Type: application/json');
+        try {
+            check_csrf();
+            $token = preg_replace('/[^a-f0-9]/', '', $_POST['token'] ?? '');
+            $s = db()->prepare('SELECT * FROM events WHERE token=? AND is_active=1'); $s->execute([$token]);
+            $event = $s->fetch();
+            if (!$event) throw new RuntimeException('This event is no longer accepting photos.');
+            $sessionId = $_SESSION['capture'][$token] ?? null;
+            if (!$sessionId) throw new RuntimeException('Capture session expired. Reload the page.');
+            db()->beginTransaction();
+            $s = db()->prepare('SELECT * FROM capture_sessions WHERE id=? AND event_id=? AND expires_at>NOW() FOR UPDATE');
+            $s->execute([$sessionId, $event['id']]); $captureSession = $s->fetch();
+            if (!$captureSession || (int)$captureSession['photo_count'] >= (int)cfg('max_photos_per_session')) throw new RuntimeException('You have reached the 5-photo limit for this scan.');
+            if (!isset($_FILES['photo']) || $_FILES['photo']['error'] !== UPLOAD_ERR_OK) throw new RuntimeException('The photo could not be uploaded.');
+            if ($_FILES['photo']['size'] > cfg('max_upload_bytes')) throw new RuntimeException('That photo is too large.');
+            $info = new finfo(FILEINFO_MIME_TYPE); $mime = $info->file($_FILES['photo']['tmp_name']);
+            if (!in_array($mime, ['image/jpeg','image/png','image/webp'], true)) throw new RuntimeException('Only camera images are accepted.');
+            $ext = ['image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp'][$mime];
+            $dir = __DIR__ . '/uploads/' . $event['id'];
+            if (!is_dir($dir) && !mkdir($dir, 0755, true)) throw new RuntimeException('Storage is not writable.');
+            $name = date('Ymd-His') . '-' . bin2hex(random_bytes(8)) . '.' . $ext;
+            if (!move_uploaded_file($_FILES['photo']['tmp_name'], $dir . '/' . $name)) throw new RuntimeException('Could not save the photo.');
+            $s = db()->prepare('INSERT INTO photos(event_id,capture_session_id,file_name,mime_type,file_size,expires_at) VALUES(?,?,?,?,?,DATE_ADD(NOW(),INTERVAL ? DAY))');
+            $s->execute([$event['id'],$sessionId,$name,$mime,$_FILES['photo']['size'],(int)cfg('photo_retention_days')]);
+            db()->prepare('UPDATE capture_sessions SET photo_count=photo_count+1 WHERE id=?')->execute([$sessionId]);
+            $remaining = (int)cfg('max_photos_per_session') - ((int)$captureSession['photo_count'] + 1);
+            db()->commit();
+            echo json_encode(['ok'=>true,'remaining'=>$remaining,'url'=>'uploads/'.$event['id'].'/'.$name]); exit;
+        } catch (Throwable $e) {
+            if (db()->inTransaction()) db()->rollBack();
+            http_response_code(400); echo json_encode(['error'=>$e->getMessage()]); exit;
+        }
+    }
+    check_csrf();
+    if ($action === 'register') {
+        $name = trim($_POST['name'] ?? ''); $email = strtolower(trim($_POST['email'] ?? '')); $password = $_POST['password'] ?? '';
+        if (strlen($name) < 2 || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($password) < 8) { flash('error','Use a valid name, email, and a password of at least 8 characters.'); go('?page=register'); }
+        try { $s=db()->prepare('INSERT INTO users(name,email,password_hash) VALUES(?,?,?)'); $s->execute([$name,$email,password_hash($password,PASSWORD_DEFAULT)]); refresh_user((int)db()->lastInsertId()); go('?page=subscribe'); }
+        catch (PDOException $e) { flash('error','That email is already registered.'); go('?page=register'); }
+    }
+    if ($action === 'login') {
+        $s=db()->prepare('SELECT * FROM users WHERE email=?'); $s->execute([strtolower(trim($_POST['email'] ?? ''))]); $u=$s->fetch();
+        if (!$u || !password_verify($_POST['password'] ?? '', $u['password_hash'])) { flash('error','Email or password is incorrect.'); go('?page=login'); }
+        refresh_user((int)$u['id']); go('?page=dashboard');
+    }
+    if ($action === 'logout') { session_destroy(); go('?'); }
+    if ($action === 'subscribe') {
+        $u=require_user();
+        if (local_payment_bypass()) {
+            db()->prepare("UPDATE users SET subscription_status='active',subscription_ends_at=DATE_ADD(NOW(),INTERVAL ? DAY) WHERE id=?")->execute([(int)cfg('plan_days'),$u['id']]);
+            refresh_user((int)$u['id']);
+            flash('success','Local test plan activated. No payment was charged.');
+            go('?page=dashboard');
+        }
+        try {
+            $reference='povents-user-'.$u['id'].'-'.bin2hex(random_bytes(5));
+            $result=paymongo('POST','checkout_sessions',['data'=>['attributes'=>[
+                'billing'=>['name'=>$u['name'],'email'=>$u['email']],
+                'line_items'=>[['currency'=>'PHP','amount'=>(int)cfg('plan_price_centavos'),'name'=>'POVents Creator — 30 days','quantity'=>1]],
+                'payment_method_types'=>['card','gcash','grab_pay','paymaya'],
+                'description'=>'Create events and collect every guest perspective.',
+                'reference_number'=>$reference,
+                'success_url'=>url('?page=payment-return'),
+                'cancel_url'=>url('?page=subscribe'),
+                'send_email_receipt'=>true,
+                'show_description'=>true,
+                'show_line_items'=>true,
+            ]]]);
+            $checkout=$result['data']; db()->prepare('INSERT INTO payments(user_id,checkout_id,amount) VALUES(?,?,?)')->execute([$u['id'],$checkout['id'],cfg('plan_price_centavos')]);
+            go($checkout['attributes']['checkout_url']);
+        } catch(Throwable $e) { flash('error','Payment checkout is temporarily unavailable. Check your PayMongo configuration.'); go('?page=subscribe'); }
+    }
+    if ($action === 'create_event') {
+        $u=require_user(); if (!active_subscription($u)) go('?page=subscribe');
+        $title=trim($_POST['title'] ?? ''); if (strlen($title)<3) { flash('error','Give your event a name.'); go('?page=new-event'); }
+        $s=db()->prepare('INSERT INTO events(user_id,title,event_date,location,token) VALUES(?,?,?,?,?)');
+        $s->execute([$u['id'],$title,$_POST['event_date'] ?: null,trim($_POST['location'] ?? ''),bin2hex(random_bytes(16))]);
+        go('?page=event&id='.(int)db()->lastInsertId());
+    }
+}
+
+if ($page === 'capture') {
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+    $token=preg_replace('/[^a-f0-9]/','',$_GET['token'] ?? ''); $s=db()->prepare('SELECT * FROM events WHERE token=? AND is_active=1'); $s->execute([$token]); $event=$s->fetch();
+    if (!$event) { http_response_code(404); exit('This photo event is unavailable.'); }
+    $sid=$_SESSION['capture'][$token] ?? null; $count=0; $validSession=false;
+    if ($sid) {
+        $s=db()->prepare('SELECT photo_count FROM capture_sessions WHERE id=? AND event_id=? AND expires_at>NOW()');
+        $s->execute([$sid,$event['id']]);
+        $storedCount=$s->fetchColumn();
+        if ($storedCount !== false) { $count=(int)$storedCount; $validSession=true; }
+    }
+    if (!$validSession) {
+        $sid=bin2hex(random_bytes(16));
+        db()->prepare('INSERT INTO capture_sessions(id,event_id,expires_at) VALUES(?,?,DATE_ADD(NOW(),INTERVAL 2 HOUR))')->execute([$sid,$event['id']]);
+        $_SESSION['capture'][$token]=$sid; $count=0;
+    }
+    ?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="csrf-token" content="<?=csrf()?>"><title><?=e($event['title'])?> · POVents</title><link rel="stylesheet" href="assets/style.css?v=4"></head><body class="camera-page"><main class="camera-shell"><div class="camera-top"><span class="brand"><i></i>POVents</span><span><?=e($event['title'])?></span></div><section class="camera" data-camera data-token="<?=e($token)?>" data-remaining="<?=cfg('max_photos_per_session')-$count?>"><video autoplay playsinline muted></video><canvas></canvas><input type="file" data-file-camera accept="image/*" capture="environment" hidden><div class="camera-controls"><button class="switch" data-switch aria-label="Switch camera">↻</button><button class="shutter" data-capture aria-label="Take a photo"></button></div></section><p class="capture-status" data-status>Preparing camera…</p><div class="strip" data-strip></div><p class="muted" style="text-align:center">Capture up to five candid moments from your point of view.</p></main><script src="assets/app.js?v=4"></script></body></html><?php exit;
+}
+
+function header_html(string $title='POVents'): void { $u=user(); $f=pull_flash(); ?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="<?=csrf()?>"><title><?=e($title)?> · POVents</title><meta name="description" content="Collect every guest's point of view through one event QR code."><link rel="stylesheet" href="assets/style.css"></head><body><header class="shell nav"><a class="brand" href="?"><i></i>POVents</a><nav class="navlinks"><?php if($u): ?><a href="?page=dashboard">My events</a><form method="post" action="?action=logout"><input type="hidden" name="csrf" value="<?=csrf()?>"><button class="button light">Log out</button></form><?php else: ?><a href="?page=login">Log in</a><a class="button" href="?page=register">Start creating</a><?php endif; ?></nav></header><?php if($f): ?><div class="shell alert <?=e($f['type'])?>"><?=e($f['message'])?></div><?php endif; }
+function footer_html(): void { ?><footer class="shell section muted">POVents — every angle tells the story.</footer></body></html><?php }
+
+purge_expired_photos();
+header_html(ucfirst(str_replace('-',' ',$page)));
+if ($page === 'home'): ?>
+<main><section class="shell hero"><div><div class="eyebrow">The crowd is your camera crew</div><h1>Every angle.<br>One story.</h1><p class="lead">Create an event, share one QR code, and let every guest capture the moments only they can see. All photos land in your private gallery automatically.</p><div style="display:flex;gap:10px;margin-top:30px"><a class="button" href="?page=register">Create your event</a><a class="button light" href="#how">See how it works</a></div></div><div class="hero-card"><div class="photo-stack"></div><div class="mini-stat"><div><strong>5</strong><br><span>shots per scan</span></div><div><strong>∞</strong><br><span>guest perspectives</span></div></div></div></section><section class="section" id="how" style="background:#e7e8dc"><div class="shell"><div class="section-head"><div><div class="eyebrow">Simple by design</div><h2>Scan. Shoot. Remember.</h2></div><p class="lead">No app download and no guest account.</p></div><div class="grid-3"><article class="feature"><div class="number">1</div><h3>Create your event</h3><p>Subscribe, add your event details, and receive a unique QR code.</p></article><article class="feature"><div class="number">2</div><h3>Guests scan & snap</h3><p>The QR opens a secure camera page. Each scan captures up to five photos.</p></article><article class="feature"><div class="number">3</div><h3>Watch it unfold</h3><p>Every photo appears in your organizer gallery, ready to revisit.</p></article></div></div></section></main>
+<?php elseif ($page === 'register' || $page === 'login'): $register=$page==='register'; ?>
+<main class="shell auth-wrap"><section class="card auth"><div class="eyebrow"><?=$register?'Your story starts here':'Welcome back'?></div><h1><?=$register?'Create account':'Log in'?></h1><form method="post" action="?action=<?=$page?>"><?php if($register): ?><div class="field"><label for="name">Your name</label><input id="name" name="name" required autocomplete="name"></div><?php endif; ?><div class="field"><label for="email">Email address</label><input id="email" name="email" type="email" required autocomplete="email"></div><div class="field"><label for="password">Password</label><input id="password" name="password" type="password" required minlength="8" autocomplete="<?=$register?'new-password':'current-password'?>"></div><input type="hidden" name="csrf" value="<?=csrf()?>"><button class="full" type="submit"><?=$register?'Continue to plan':'Log in'?></button></form><p class="muted"><?=$register?'Already have an account? <a href="?page=login">Log in</a>':'New here? <a href="?page=register">Create an account</a>'?></p></section></main>
+<?php elseif ($page === 'subscribe'): $u=require_user(); ?>
+<main class="shell auth-wrap"><section class="card auth"><div class="eyebrow">Creator plan</div><h1>One plan. Every perspective.</h1><p class="lead">Create unlimited events and collect guest photos in private galleries.</p><div style="font-size:46px;font-weight:850;margin:22px 0">₱<?=number_format(cfg('plan_price_centavos')/100)?> <small class="muted" style="font-size:16px">/ 30 days</small></div><form method="post" action="?action=subscribe"><input type="hidden" name="csrf" value="<?=csrf()?>"><button class="full"><?=local_payment_bypass()?'Activate local test plan':'Pay securely with PayMongo'?></button></form><?php if(local_payment_bypass()): ?><p class="alert" style="font-size:13px"><strong>Local testing:</strong> Payment is bypassed and no charge will be made.</p><?php else: ?><p class="muted" style="font-size:13px">Card, GCash, GrabPay, and Maya availability depends on your activated PayMongo account.</p><?php endif; ?></section></main>
+<?php elseif ($page === 'payment-return'): $u=require_user(); refresh_user((int)$u['id']); ?>
+<main class="shell auth-wrap"><section class="card auth"><div class="eyebrow">Payment received</div><h1>We’re confirming it.</h1><p class="lead">PayMongo will confirm your payment securely. Your Creator plan activates automatically, usually within a few seconds.</p><a class="button full" href="?page=dashboard">Check my plan</a></section></main>
+<?php elseif ($page === 'dashboard'): $u=require_user(); $s=db()->prepare('SELECT e.*,COUNT(p.id) photos FROM events e LEFT JOIN photos p ON p.event_id=e.id WHERE e.user_id=? GROUP BY e.id ORDER BY e.created_at DESC');$s->execute([$u['id']]);$events=$s->fetchAll();$photos=array_sum(array_column($events,'photos')); ?>
+<main class="shell"><div class="dash-head"><div><div class="eyebrow">Organizer studio</div><h1>Hello, <?=e(explode(' ',$u['name'])[0])?>.</h1></div><a class="button" href="?page=new-event">+ New event</a></div><section class="stats"><div class="stat"><span>Events</span><strong><?=count($events)?></strong></div><div class="stat"><span>Photos collected</span><strong><?=$photos?></strong></div><div class="stat"><span>Plan</span><strong><?=active_subscription($u)?'Active':'Inactive'?></strong></div></section><?php if(!$events): ?><div class="empty"><h3>Your first story starts here.</h3><p>Create an event to get your guest QR code.</p><a class="button" href="?page=new-event">Create event</a></div><?php else: ?><div class="event-list"><?php foreach($events as $event): ?><a class="event-row" href="?page=event&id=<?=$event['id']?>"><div><h3><?=e($event['title'])?></h3><span class="muted"><?=e($event['event_date'] ?: 'Date not set')?> · <?=e($event['location'] ?: 'Location not set')?></span></div><strong><?=$event['photos']?> photos →</strong></a><?php endforeach; ?></div><?php endif; ?></main>
+<?php elseif ($page === 'new-event'): $u=require_user(); if(!active_subscription($u)) go('?page=subscribe'); ?>
+<main class="shell auth-wrap"><section class="card auth"><div class="eyebrow">New collection</div><h1>Create event</h1><form method="post" action="?action=create_event"><div class="field"><label for="title">Event name</label><input id="title" name="title" placeholder="Maya & Luis' wedding" required></div><div class="field"><label for="date">Date</label><input id="date" name="event_date" type="date"></div><div class="field"><label for="location">Location</label><input id="location" name="location" placeholder="The Glass Garden"></div><input type="hidden" name="csrf" value="<?=csrf()?>"><button class="full">Create event & QR</button></form></section></main>
+<?php elseif ($page === 'event'): $u=require_user();$event=event_for_owner((int)($_GET['id']??0),(int)$u['id']);if(!$event){http_response_code(404);echo '<main class="shell empty">Event not found.</main>';}else{$s=db()->prepare('SELECT * FROM photos WHERE event_id=? AND expires_at>NOW() ORDER BY created_at DESC');$s->execute([$event['id']]);$photos=$s->fetchAll();$guest=url('?page=capture&token='.$event['token']);$qr='https://api.qrserver.com/v1/create-qr-code/?size=520x520&data='.rawurlencode($guest);$soonest=$photos?min(array_map(fn($p)=>strtotime($p['expires_at']),$photos)):null; ?>
+<main class="shell"><div class="dash-head"><div><a class="muted" href="?page=dashboard">← All events</a><h1><?=e($event['title'])?></h1><p class="muted"><?=e($event['event_date']?:'Date not set')?> · <?=e($event['location']?:'Location not set')?></p></div><strong><?=count($photos)?> photos</strong></div><section class="card qr-panel"><img src="<?=e($qr)?>" alt="Guest camera QR code"><div><div class="eyebrow">Guest camera link</div><h2>Print it. Place it. Let guests shoot.</h2><p class="muted">Each new scan opens the camera and allows up to five photo uploads.</p><div class="copyline"><input id="guest-link" readonly value="<?=e($guest)?>"><button type="button" onclick="navigator.clipboard.writeText(document.getElementById('guest-link').value);this.textContent='Copied!'">Copy</button></div><p><a href="<?=e($guest)?>" target="_blank">Preview guest camera →</a></p></div></section><?php if($soonest): ?><div class="alert" style="margin-top:18px"><strong>7-day storage:</strong> The earliest photos expire <?=date('M j, Y \a\t g:i A',$soonest)?>. Download originals before they are permanently erased.</div><?php endif; ?><section class="section"><div class="section-head"><div><div class="eyebrow">Live gallery</div><h2>Every point of view</h2></div><button class="button light" onclick="location.reload()">Refresh photos</button></div><?php if(!$photos): ?><div class="empty">No photos yet. Share the QR code and watch this gallery come alive.</div><?php else: ?><div class="gallery"><?php foreach($photos as $photo): ?><figure class="shot"><a href="uploads/<?=$event['id']?>/<?=e($photo['file_name'])?>" download><img loading="lazy" src="uploads/<?=$event['id']?>/<?=e($photo['file_name'])?>" alt="Guest photo"></a><time><?=max(1,(int)ceil((strtotime($photo['expires_at'])-time())/86400))?>d left</time></figure><?php endforeach; ?></div><?php endif; ?></section></main>
+<?php } else: http_response_code(404); ?><main class="shell empty">Page not found.</main><?php endif; footer_html();
