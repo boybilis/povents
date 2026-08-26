@@ -94,6 +94,7 @@ function download_photo_album(array $event): never {
     $s->execute([$event['id']]);
     $photos = array_values(array_filter($s->fetchAll(), static fn(array $photo): bool => is_file(__DIR__.'/uploads/'.$event['id'].'/'.basename($photo['file_name']))));
     if (!$photos) { flash('error', 'This event does not have any available photos yet.'); go('?page=event&id='.$event['id']); }
+    if (!extension_loaded('gd')) { http_response_code(500); exit('Photo album compression is not enabled on this server. Enable the PHP GD extension and try again.'); }
     $safeTitle = e((string)$event['title']);
     $date = $event['event_date'] ? date('F j, Y', strtotime((string)$event['event_date'])) : '';
     $fileName = preg_replace('/[^A-Za-z0-9_-]+/', '-', trim((string)$event['title'])).'-offline-album.html';
@@ -109,15 +110,33 @@ function download_photo_album(array $event): never {
         echo '<article class="page"><div class="grid">';
         foreach ($pagePhotos as $photoIndex => $photo) {
             $path = __DIR__.'/uploads/'.$event['id'].'/'.basename($photo['file_name']);
-            $mime = in_array($photo['mime_type'], ['image/jpeg','image/png','image/webp'], true) ? $photo['mime_type'] : 'image/jpeg';
             $tilt = (($pageIndex * 4 + $photoIndex) % 2 === 0) ? '-0.5deg' : '0.5deg';
-            echo '<figure class="photo" style="--tilt:'.$tilt.'"><img src="data:'.$mime.';base64,'.base64_encode((string)file_get_contents($path)).'" alt="Event photo"></figure>';
+            echo '<figure class="photo" style="--tilt:'.$tilt.'"><img src="'.album_photo_data_uri($path).'" alt="Event photo"></figure>';
             if (function_exists('ob_flush')) @ob_flush(); flush();
         }
         echo '</div></article>';
     }
     echo '</section><footer><div class="controls"><button id="prev" type="button">← Previous</button><span class="count" id="count"></span><button id="next" type="button">Next →</button></div><p class="hint">Swipe or use the arrow keys to turn pages · Photos are stored inside this file</p></footer></main><script>(()=>{const p=[...document.querySelectorAll(".page")],prev=document.querySelector("#prev"),next=document.querySelector("#next"),count=document.querySelector("#count");let i=0,startX=0;function show(n,reverse=false){i=Math.max(0,Math.min(p.length-1,n));p.forEach((el,x)=>{el.classList.toggle("active",x===i);el.classList.toggle("reverse",x===i&&reverse)});prev.disabled=i===0;next.disabled=i===p.length-1;count.textContent=`${i+1} / ${p.length}`}prev.onclick=()=>show(i-1,true);next.onclick=()=>show(i+1);addEventListener("keydown",e=>{if(e.key==="ArrowLeft")show(i-1,true);if(e.key==="ArrowRight")show(i+1)});document.querySelector("#book").addEventListener("touchstart",e=>startX=e.touches[0].clientX,{passive:true});document.querySelector("#book").addEventListener("touchend",e=>{const d=e.changedTouches[0].clientX-startX;if(Math.abs(d)>45)show(i+(d<0?1:-1),d>0)},{passive:true});show(0)})();</script></body></html>';
     exit;
+}
+
+function album_photo_data_uri(string $path): string {
+    $bytes = @file_get_contents($path);
+    $source = is_string($bytes) ? @imagecreatefromstring($bytes) : false;
+    if (!$source) throw new RuntimeException('An album photo could not be processed.');
+    $sourceWidth = imagesx($source); $sourceHeight = imagesy($source);
+    $portrait = $sourceHeight >= $sourceWidth;
+    $targetWidth = $portrait ? 480 : 640; $targetHeight = $portrait ? 640 : 480;
+    $targetRatio = $targetWidth / $targetHeight; $sourceRatio = $sourceWidth / $sourceHeight;
+    $sourceX = 0; $sourceY = 0; $cropWidth = $sourceWidth; $cropHeight = $sourceHeight;
+    if ($sourceRatio > $targetRatio) { $cropWidth = (int)round($sourceHeight * $targetRatio); $sourceX = (int)(($sourceWidth - $cropWidth) / 2); }
+    elseif ($sourceRatio < $targetRatio) { $cropHeight = (int)round($sourceWidth / $targetRatio); $sourceY = (int)(($sourceHeight - $cropHeight) / 2); }
+    $resized = imagecreatetruecolor($targetWidth, $targetHeight);
+    $white = imagecolorallocate($resized, 255, 255, 255); imagefill($resized, 0, 0, $white);
+    imagecopyresampled($resized, $source, 0, 0, $sourceX, $sourceY, $targetWidth, $targetHeight, $cropWidth, $cropHeight);
+    ob_start(); imagejpeg($resized, null, 76); $jpeg = (string)ob_get_clean();
+    imagedestroy($source); imagedestroy($resized);
+    return 'data:image/jpeg;base64,'.base64_encode($jpeg);
 }
 
 function paymongo(string $method, string $path, ?array $body = null): array {
