@@ -9,11 +9,26 @@
   toolbar.id = 'gallery-download';
   toolbar.method = 'post';
   toolbar.action = '?action=download_zip';
-  toolbar.innerHTML = `<input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="event_id" value="${eventId || ''}"><label><input type="checkbox" data-select-all> Select all</label><span data-selected>0 selected</span><button type="submit" disabled>Download ZIP</button><a class="button light album-download" href="?action=download_photo_album&amp;event_id=${encodeURIComponent(eventId || '')}">Download photo album</a><button class="button light album-share" type="button">Copy shareable album link</button>`;
+  toolbar.innerHTML = `<input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="event_id" value="${eventId || ''}"><label><input type="checkbox" data-select-all> Select page</label><span data-selected>0 selected</span><button type="submit" disabled>Download ZIP</button><a class="button light album-download" href="?action=download_photo_album&amp;event_id=${encodeURIComponent(eventId || '')}">Download photo album</a><button class="button light album-share" type="button">Copy shareable album link</button>`;
   document.querySelector('.gallery').before(toolbar);
   const selectedLabel = toolbar.querySelector('[data-selected]');
   const downloadButton = toolbar.querySelector('button');
   const selectAll = toolbar.querySelector('[data-select-all]');
+  const gallery = document.querySelector('.gallery');
+  const shots = links.map(link => link.closest('.shot'));
+  const photosPerPage = 30;
+  const totalPages = Math.ceil(links.length / photosPerPage);
+  let currentPage = 0;
+  links.forEach(link => { const image = link.querySelector('img'); if (image) { image.loading = 'lazy'; image.decoding = 'async'; } });
+  const pagination = document.createElement('nav');
+  pagination.className = 'gallery-pagination';
+  pagination.setAttribute('aria-label', 'Gallery pages');
+  pagination.innerHTML = '<button type="button" data-page-prev>← Previous</button><span data-page-status></span><button type="button" data-page-next>Next →</button>';
+  gallery.after(pagination);
+  pagination.hidden = totalPages <= 1;
+  const pagePrevious = pagination.querySelector('[data-page-prev]');
+  const pageNext = pagination.querySelector('[data-page-next]');
+  const pageStatus = pagination.querySelector('[data-page-status]');
   const shareButton = toolbar.querySelector('.album-share');
   shareButton.addEventListener('click', async () => {
     shareButton.disabled = true;
@@ -40,16 +55,31 @@
     return check;
   });
 
+  function renderPage(page) {
+    currentPage = Math.max(0, Math.min(totalPages - 1, page));
+    shots.forEach((shot, index) => { shot.hidden = Math.floor(index / photosPerPage) !== currentPage; });
+    pageStatus.textContent = `Page ${currentPage + 1} of ${totalPages}`;
+    pagePrevious.disabled = currentPage === 0;
+    pageNext.disabled = currentPage === totalPages - 1;
+    updateSelection();
+    if (page > 0) gallery.scrollIntoView({behavior: 'smooth', block: 'start'});
+  }
+
   function updateSelection() {
     const count = checks.filter(check => check.checked).length;
     selectedLabel.textContent = `${count} selected`;
     downloadButton.disabled = count === 0;
-    selectAll.checked = count === checks.length;
-    selectAll.indeterminate = count > 0 && count < checks.length;
+    const pageChecks = checks.filter((_, index) => Math.floor(index / photosPerPage) === currentPage);
+    const pageSelected = pageChecks.filter(check => check.checked).length;
+    selectAll.checked = pageChecks.length > 0 && pageSelected === pageChecks.length;
+    selectAll.indeterminate = pageSelected > 0 && pageSelected < pageChecks.length;
     links.forEach((link,index) => link.closest('.shot').classList.toggle('is-selected',checks[index].checked));
   }
   checks.forEach(check => check.addEventListener('change',updateSelection));
-  selectAll.addEventListener('change',() => {checks.forEach(check => {check.checked=selectAll.checked;});updateSelection();});
+  selectAll.addEventListener('change',() => {checks.forEach((check,index) => {if(Math.floor(index/photosPerPage)===currentPage)check.checked=selectAll.checked;});updateSelection();});
+  pagePrevious.addEventListener('click', () => renderPage(currentPage - 1));
+  pageNext.addEventListener('click', () => renderPage(currentPage + 1));
+  renderPage(0);
 
   const modal = document.createElement('div');
   modal.className = 'photo-modal';
@@ -75,6 +105,8 @@
 
   function show(index) {
     current = (index + links.length) % links.length;
+    const imagePage = Math.floor(current / photosPerPage);
+    if (imagePage !== currentPage) renderPage(imagePage);
     const href = links[current].href;
     image.src = href;
     download.href = href;

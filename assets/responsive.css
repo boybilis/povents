@@ -14,6 +14,7 @@ button,.button,input{min-height:44px}
 .gallery-toolbar button{padding:10px 17px}
 .gallery-toolbar .album-download{padding:10px 17px;white-space:nowrap}
 .gallery-toolbar .album-share{padding:10px 17px;white-space:nowrap;background:#fffdf8;color:#17231f;border:1px solid #d9ddd4}
+.gallery-pagination{display:flex;align-items:center;justify-content:center;gap:14px;margin:20px 0 0}.gallery-pagination button{padding:10px 16px;background:#fffdf8;color:#17231f;border:1px solid #d9ddd4}.gallery-pagination span{min-width:110px;text-align:center;color:#64716b;font-size:14px;font-weight:700}.gallery-pagination button:disabled{opacity:.4}
 .photo-select{position:absolute;z-index:3;top:8px;left:8px;width:30px;height:30px;border-radius:50%;background:#ffffffdd;display:grid;place-items:center;cursor:pointer;box-shadow:0 3px 12px #0003}
 .photo-select input{position:absolute;opacity:0;pointer-events:none}
 .photo-select span{color:#245b45;font-weight:900;opacity:0}
@@ -98,6 +99,7 @@ button,.button,input{min-height:44px}
   .gallery-toolbar{display:grid;grid-template-columns:1fr auto;gap:10px}
   .gallery-toolbar [data-selected]{margin:0;text-align:right}
   .gallery-toolbar button,.gallery-toolbar .album-download,.gallery-toolbar .album-share{grid-column:auto;width:100%}
+  .gallery-pagination{gap:8px}.gallery-pagination button{padding:9px 12px}.gallery-pagination span{min-width:90px;font-size:13px}
   .shot{margin:0}
   .shot img{height:190px;object-fit:cover;border-radius:13px}
 

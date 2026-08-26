@@ -14,7 +14,7 @@ ob_start(static function (string $html): string {
     }
     return str_replace(
         ['</head>','</body>'],
-        ['<link rel="icon" href="assets/povents-logo.png"><link rel="stylesheet" href="assets/responsive.css?v=9"></head>','<script src="assets/gallery.js?v=4"></script></body>'],
+        ['<link rel="icon" href="assets/povents-logo.png"><link rel="stylesheet" href="assets/responsive.css?v=10"></head>','<script src="assets/gallery.js?v=5"></script></body>'],
         $html
     );
 });
