@@ -63,6 +63,32 @@ function event_for_owner(int $id, int $userId): ?array {
     return $s->fetch() ?: null;
 }
 
+function download_event_qr(array $event, string $guestUrl): never {
+    $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=900x900&margin=18&data='.rawurlencode($guestUrl);
+    $ch = curl_init($qrUrl);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>20,CURLOPT_FOLLOWLOCATION=>true,CURLOPT_USERAGENT=>'POVents QR Generator']);
+    $qrBytes = curl_exec($ch); $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE); curl_close($ch);
+    $logoBytes = @file_get_contents(__DIR__.'/assets/povents-logo.png');
+    if (!is_string($qrBytes) || $status !== 200 || !is_string($logoBytes)) { http_response_code(502); exit('The branded QR image could not be created. Please try again.'); }
+    $title = e((string)$event['title']);
+    $date = date('F j, Y', strtotime((string)$event['event_date']));
+    $times = date('g:i A', strtotime((string)$event['start_time'])).' - '.date('g:i A', strtotime((string)$event['end_time']));
+    $titleSize = max(34, min(58, (int)floor(900 / max(1, strlen((string)$event['title'])) * 1.7)));
+    $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1500" viewBox="0 0 1200 1500">'
+        .'<rect width="1200" height="1500" rx="42" fill="#fffdf8"/>'
+        .'<image href="data:image/png;base64,'.base64_encode($logoBytes).'" x="290" y="45" width="620" height="224" preserveAspectRatio="xMidYMid meet"/>'
+        .'<rect x="126" y="276" width="948" height="948" rx="32" fill="#fff" stroke="#d9ddd4" stroke-width="4"/>'
+        .'<image href="data:image/png;base64,'.base64_encode($qrBytes).'" x="150" y="300" width="900" height="900"/>'
+        .'<text x="600" y="1305" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="'.$titleSize.'" font-weight="700" fill="#072a20">'.$title.'</text>'
+        .'<text x="600" y="1375" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="28" fill="#63706b">'.e($date.'  |  '.$times).'</text>'
+        .'<text x="600" y="1440" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="22" fill="#63706b">Scan to share your point of view</text>'
+        .'</svg>';
+    $fileName = preg_replace('/[^A-Za-z0-9_-]+/', '-', trim((string)$event['title'])).'-QR.svg';
+    if (ob_get_level()) ob_end_clean();
+    header('Content-Type: image/svg+xml; charset=UTF-8'); header('Content-Disposition: attachment; filename="'.$fileName.'"'); header('Cache-Control: private, no-store');
+    echo $svg; exit;
+}
+
 function paymongo(string $method, string $path, ?array $body = null): array {
     $ch = curl_init('https://api.paymongo.com/v1/' . ltrim($path, '/'));
     curl_setopt_array($ch, [

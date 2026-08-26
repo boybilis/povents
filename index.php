@@ -7,6 +7,10 @@ ob_start(static function (string $html): string {
     $html = str_replace('<span class="brand"><img src="assets/povents-logo.png" alt="POVents"></span>', '<span class="brand"><img src="assets/povents-logo-dark.png" alt="POVents"></span>', $html);
     $html = str_replace('<footer class="shell section muted">POVents', '<footer class="shell section muted"><img class="footer-logo" src="assets/povents-logo.png" alt="POVents">', $html);
     $html = str_replace('<section class="card" style="text-align:center;color:#17231f"><div class="eyebrow">', '<section class="card" style="text-align:center;color:#17231f"><img class="message-logo" src="assets/povents-logo.png" alt="POVents"><div class="eyebrow">', $html);
+    if (str_contains($html, 'id="guest-link"') && isset($_GET['id'])) {
+        $downloadButton = '<p><a class="button light" href="?action=download_event_qr&amp;event_id='.(int)$_GET['id'].'">Download branded QR image</a></p>';
+        $html = preg_replace('~(<div class="copyline">.*?</div>)~s', '$1'.$downloadButton, $html, 1) ?? $html;
+    }
     return str_replace(
         ['</head>','</body>'],
         ['<link rel="icon" href="assets/povents-logo.png"><link rel="stylesheet" href="assets/responsive.css?v=5"></head>','<script src="assets/gallery.js?v=2"></script></body>'],
@@ -16,6 +20,13 @@ ob_start(static function (string $html): string {
 
 $page = $_GET['page'] ?? 'home';
 $action = $_GET['action'] ?? '';
+
+if ($action === 'download_event_qr') {
+    $u = require_user();
+    $event = event_for_owner((int)($_GET['event_id'] ?? 0), (int)$u['id']);
+    if (!$event) { http_response_code(404); exit('Event not found.'); }
+    download_event_qr($event, url('?page=capture&token='.$event['token']));
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'upload') {
