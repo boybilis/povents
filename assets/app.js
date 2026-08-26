@@ -35,6 +35,7 @@
   let pendingPhoto = null;
   let pendingPreviewUrl = '';
   let previewTimer = null;
+  let cameraRequestId = 0;
 
   const setStatus = (message, error = false) => {
     status.textContent = message;
@@ -50,6 +51,7 @@
   }
 
   async function start() {
+    const requestId = ++cameraRequestId;
     if (remaining < 1) {
       capture.disabled = true;
       switchButton.style.display = 'none';
@@ -61,18 +63,32 @@
       video.style.display = 'block';
       setStatus('Starting camera…');
       if (location.protocol !== 'https:' || !window.isSecureContext || !navigator.mediaDevices?.getUserMedia) { useNativeCamera(); return; }
+      switchButton.disabled = true;
       if (stream) stream.getTracks().forEach(track => track.stop());
-      stream = await Promise.race([
-        navigator.mediaDevices.getUserMedia({video: {facingMode, width: {ideal: 1920}, height: {ideal: 1920}}, audio: false}),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Camera preview timed out')), 5000)),
-      ]);
+      stream = null;
+      imageCapture = null;
+      video.pause();
+      video.srcObject = null;
+      await new Promise(resolve => setTimeout(resolve, 180));
+      const mediaRequest = navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal: facingMode}, width: {ideal: 1920}, height: {ideal: 1080}}, audio: false});
+      let requestTimedOut = false;
+      mediaRequest.then(lateStream => {
+        if (requestTimedOut || requestId !== cameraRequestId) lateStream.getTracks().forEach(track => track.stop());
+      }).catch(() => {});
+      const timeout = new Promise((_, reject) => setTimeout(() => { requestTimedOut = true; reject(new Error('Camera preview timed out')); }, 7000));
+      stream = await Promise.race([mediaRequest, timeout]);
+      if (requestId !== cameraRequestId) { stream.getTracks().forEach(track => track.stop()); return; }
+      if (requestTimedOut) { stream.getTracks().forEach(track => track.stop()); return; }
       nativeCapture = false;
       video.srcObject = stream;
+      await video.play().catch(() => {});
       const videoTrack = stream.getVideoTracks()[0];
       imageCapture = 'ImageCapture' in window && videoTrack ? new ImageCapture(videoTrack) : null;
       switchButton.style.display = '';
+      switchButton.disabled = false;
       setStatus(`${remaining} photo${remaining === 1 ? '' : 's'} remaining`);
     } catch (_) {
+      switchButton.disabled = false;
       useNativeCamera();
     }
   }
@@ -219,5 +235,12 @@
     facingMode = facingMode === 'environment' ? 'user' : 'environment';
     start();
   });
+  window.addEventListener('pagehide', () => {
+    cameraRequestId++;
+    if (stream) stream.getTracks().forEach(track => track.stop());
+    stream = null;
+    video.srcObject = null;
+  });
+  window.addEventListener('pageshow', event => { if (event.persisted && remaining > 0) start(); });
   start();
 })();
