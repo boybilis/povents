@@ -46,13 +46,18 @@
       return;
     }
     try {
+      lastPhoto.style.display = 'none';
+      video.style.display = 'block';
+      setStatus('Starting camera…');
       if (location.protocol !== 'https:' || !window.isSecureContext || !navigator.mediaDevices?.getUserMedia) { useNativeCamera(); return; }
       if (stream) stream.getTracks().forEach(track => track.stop());
       stream = await Promise.race([
         navigator.mediaDevices.getUserMedia({video: {facingMode}, audio: false}),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Camera preview timed out')), 5000)),
       ]);
+      nativeCapture = false;
       video.srcObject = stream;
+      switchButton.style.display = '';
       setStatus(`${remaining} photo${remaining === 1 ? '' : 's'} remaining`);
     } catch (_) {
       useNativeCamera();
@@ -72,6 +77,9 @@
       remaining = data.remaining;
       lastPhoto.src = data.url;
       lastPhoto.style.display = 'block';
+      if (!nativeCapture && remaining > 0) {
+        setTimeout(() => { lastPhoto.style.display = 'none'; }, 1200);
+      }
       const img = new Image();
       img.src = data.url;
       img.alt = 'Your captured photo';
@@ -111,6 +119,10 @@
     fileCamera.value = '';
   });
 
-  switchButton?.addEventListener('click', () => { facingMode = facingMode === 'environment' ? 'user' : 'environment'; start(); });
+  switchButton?.addEventListener('click', () => {
+    lastPhoto.style.display = 'none';
+    facingMode = facingMode === 'environment' ? 'user' : 'environment';
+    start();
+  });
   start();
 })();
