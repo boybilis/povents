@@ -125,7 +125,7 @@
     context.drawImage(bitmap, 0, 0);
     const fontSize = Math.max(22, Math.min(54, Math.round(bitmap.width * .035)));
     const padding = Math.round(fontSize * .7);
-    const text = caption ? `POVents  •  ${caption}` : 'POVents';
+    const text = caption ? `POVents  •  "${caption}"` : 'POVents';
     context.font = `700 ${fontSize}px system-ui, sans-serif`;
     context.textBaseline = 'middle';
     const barHeight = fontSize + padding * 1.5;
@@ -215,7 +215,7 @@
 
   captionInput.addEventListener('input', () => {
     captionInput.value = captionInput.value.slice(0, 30);
-    watermarkPreview.textContent = captionInput.value ? `POVents  •  ${captionInput.value}` : 'POVents';
+    watermarkPreview.textContent = captionInput.value ? `POVents  •  "${captionInput.value}"` : 'POVents';
   });
 
   reviewControls.querySelector('[data-approve]').addEventListener('click', async () => {
