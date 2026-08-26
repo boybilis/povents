@@ -2,7 +2,7 @@
 declare(strict_types=1);
 session_start();
 require __DIR__ . '/lib.php';
-ob_start(static fn(string $html): string => str_replace(['</head>','</body>'], ['<link rel="stylesheet" href="assets/responsive.css?v=2"></head>','<script src="assets/gallery.js?v=1"></script></body>'], $html));
+ob_start(static fn(string $html): string => str_replace(['</head>','</body>'], ['<link rel="stylesheet" href="assets/responsive.css?v=3"></head>','<script src="assets/gallery.js?v=2"></script></body>'], $html));
 
 $page = $_GET['page'] ?? 'home';
 $action = $_GET['action'] ?? '';
@@ -47,6 +47,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     check_csrf();
+    if ($action === 'download_zip') {
+        $u=require_user(); $event=event_for_owner((int)($_POST['event_id']??0),(int)$u['id']);
+        if (!$event) { http_response_code(404); exit('Event not found.'); }
+        $requested=array_values(array_unique(array_filter(array_map('basename',$_POST['files']??[]))));
+        if (!$requested) { flash('error','Select at least one photo to download.'); go('?page=event&id='.$event['id']); }
+        if (!class_exists('ZipArchive')) { flash('error','ZIP downloads are not enabled on this server.'); go('?page=event&id='.$event['id']); }
+        $placeholders=implode(',',array_fill(0,count($requested),'?'));
+        $s=db()->prepare("SELECT file_name FROM photos WHERE event_id=? AND expires_at>NOW() AND file_name IN ($placeholders)");
+        $s->execute(array_merge([$event['id']],$requested)); $files=$s->fetchAll(PDO::FETCH_COLUMN);
+        if (!$files) { flash('error','The selected photos are no longer available.'); go('?page=event&id='.$event['id']); }
+        $zipPath=tempnam(sys_get_temp_dir(),'povents-'); $zip=new ZipArchive();
+        if ($zip->open($zipPath,ZipArchive::CREATE|ZipArchive::OVERWRITE)!==true) { @unlink($zipPath); http_response_code(500); exit('Could not create ZIP file.'); }
+        foreach($files as $file){$path=__DIR__.'/uploads/'.$event['id'].'/'.basename($file);if(is_file($path))$zip->addFile($path,basename($file));}
+        $zip->close(); $downloadName=preg_replace('/[^A-Za-z0-9_-]+/','-',trim($event['title'])).'-photos.zip';
+        if (ob_get_level()) ob_end_clean();
+        header('Content-Type: application/zip'); header('Content-Disposition: attachment; filename="'.$downloadName.'"'); header('Content-Length: '.filesize($zipPath)); header('Cache-Control: no-store');
+        readfile($zipPath); @unlink($zipPath); exit;
+    }
     if ($action === 'register') {
         $name = trim($_POST['name'] ?? ''); $email = strtolower(trim($_POST['email'] ?? '')); $password = $_POST['password'] ?? '';
         if (strlen($name) < 2 || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($password) < 8) { flash('error','Use a valid name, email, and a password of at least 8 characters.'); go('?page=register'); }

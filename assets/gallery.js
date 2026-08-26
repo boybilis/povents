@@ -2,6 +2,41 @@
   const links = [...document.querySelectorAll('.gallery .shot a')];
   if (!links.length) return;
 
+  const eventId = new URLSearchParams(location.search).get('id');
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  const toolbar = document.createElement('form');
+  toolbar.className = 'gallery-toolbar';
+  toolbar.id = 'gallery-download';
+  toolbar.method = 'post';
+  toolbar.action = '?action=download_zip';
+  toolbar.innerHTML = `<input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="event_id" value="${eventId || ''}"><label><input type="checkbox" data-select-all> Select all</label><span data-selected>0 selected</span><button type="submit" disabled>Download ZIP</button>`;
+  document.querySelector('.gallery').before(toolbar);
+  const selectedLabel = toolbar.querySelector('[data-selected]');
+  const downloadButton = toolbar.querySelector('button');
+  const selectAll = toolbar.querySelector('[data-select-all]');
+
+  const checks = links.map(link => {
+    const fileName = decodeURIComponent(new URL(link.href).pathname.split('/').pop());
+    const label = document.createElement('label');
+    label.className = 'photo-select';
+    label.innerHTML = `<input type="checkbox" name="files[]" value="${fileName}"><span aria-hidden="true">✓</span>`;
+    link.closest('.shot').appendChild(label);
+    const check = label.querySelector('input');
+    check.setAttribute('form',toolbar.id);
+    return check;
+  });
+
+  function updateSelection() {
+    const count = checks.filter(check => check.checked).length;
+    selectedLabel.textContent = `${count} selected`;
+    downloadButton.disabled = count === 0;
+    selectAll.checked = count === checks.length;
+    selectAll.indeterminate = count > 0 && count < checks.length;
+    links.forEach((link,index) => link.closest('.shot').classList.toggle('is-selected',checks[index].checked));
+  }
+  checks.forEach(check => check.addEventListener('change',updateSelection));
+  selectAll.addEventListener('change',() => {checks.forEach(check => {check.checked=selectAll.checked;});updateSelection();});
+
   const modal = document.createElement('div');
   modal.className = 'photo-modal';
   modal.hidden = true;

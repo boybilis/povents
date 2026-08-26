@@ -3,8 +3,19 @@ html,body{max-width:100%;overflow-x:hidden}
 button,.button,input{min-height:44px}
 .gallery{columns:unset;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
 .gallery .shot{margin:0}
+.gallery .shot{position:relative}
 .gallery .shot img{width:100%;height:auto;aspect-ratio:1/1;object-fit:cover;border-radius:13px;transition:transform .2s ease,filter .2s ease}
 .gallery .shot a:hover img{transform:scale(1.025);filter:brightness(.92)}
+.gallery .shot.is-selected img{outline:4px solid #dff25f;outline-offset:-4px;filter:brightness(.8)}
+.gallery-toolbar{display:flex;align-items:center;gap:14px;margin:0 0 16px;padding:14px 16px;background:#fffdf8;border:1px solid #d9ddd4;border-radius:16px}
+.gallery-toolbar label{display:flex;align-items:center;gap:7px;font-weight:750}
+.gallery-toolbar input[type="checkbox"]{min-height:0;width:18px;height:18px;accent-color:#245b45}
+.gallery-toolbar [data-selected]{color:#64716b;margin-right:auto}
+.gallery-toolbar button{padding:10px 17px}
+.photo-select{position:absolute;z-index:3;top:8px;left:8px;width:30px;height:30px;border-radius:50%;background:#ffffffdd;display:grid;place-items:center;cursor:pointer;box-shadow:0 3px 12px #0003}
+.photo-select input{position:absolute;opacity:0;pointer-events:none}
+.photo-select span{color:#245b45;font-weight:900;opacity:0}
+.shot.is-selected .photo-select{background:#dff25f}.shot.is-selected .photo-select span{opacity:1}
 .photo-modal{position:fixed;inset:0;z-index:1000;display:grid;grid-template-columns:72px minmax(0,1fr) 72px;align-items:center;background:rgba(4,9,7,.95);padding:24px;color:#fff}
 .photo-modal[hidden]{display:none}
 .photo-modal__stage{height:calc(100vh - 48px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-width:0}
@@ -59,6 +70,9 @@ button,.button,input{min-height:44px}
   .copyline button{width:100%}
 
   .gallery{columns:unset;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .gallery-toolbar{display:grid;grid-template-columns:1fr auto;gap:10px}
+  .gallery-toolbar [data-selected]{margin:0;text-align:right}
+  .gallery-toolbar button{grid-column:1/-1;width:100%}
   .shot{margin:0}
   .shot img{height:190px;object-fit:cover;border-radius:13px}
 
