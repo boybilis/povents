@@ -207,6 +207,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pending['otp_hash']=password_hash($otp,PASSWORD_DEFAULT); $pending['expires_at']=time()+600; $pending['attempts']=0; $pending['last_sent_at']=time(); $_SESSION['pending_registration']=$pending;
         flash('success','A new verification code was sent.'); go('?page=verify-registration');
     }
+    if ($action === 'forgot_password') {
+        $email = strtolower(trim($_POST['email'] ?? ''));
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) { flash('error','Enter a valid email address.'); go('?page=forgot-password'); }
+        $s = db()->prepare('SELECT id,name,email FROM users WHERE email=? LIMIT 1'); $s->execute([$email]); $account = $s->fetch();
+        $otp = (string)random_int(100000,999999);
+        if ($account) {
+            try { send_password_reset_otp((string)$account['name'], (string)$account['email'], $otp); }
+            catch (Throwable $e) { unset($_SESSION['pending_password_reset']); flash('error',$e->getMessage()); go('?page=forgot-password'); }
+        }
+        $_SESSION['pending_password_reset'] = ['user_id'=>(int)($account['id']??0),'name'=>(string)($account['name']??'POVents user'),'email'=>$email,'otp_hash'=>password_hash($otp,PASSWORD_DEFAULT),'expires_at'=>time()+600,'attempts'=>0,'last_sent_at'=>time(),'verified_at'=>null];
+        go('?page=verify-password-reset');
+    }
+    if ($action === 'verify_password_reset') {
+        $pending = $_SESSION['pending_password_reset'] ?? null; $otp = preg_replace('/\D/','',$_POST['otp'] ?? '');
+        if (!$pending || (int)$pending['expires_at'] < time()) { unset($_SESSION['pending_password_reset']); flash('error','Your password reset code expired. Please start again.'); go('?page=forgot-password'); }
+        $pending['attempts'] = (int)$pending['attempts'] + 1; $_SESSION['pending_password_reset'] = $pending;
+        if ($pending['attempts'] > 5) { unset($_SESSION['pending_password_reset']); flash('error','Too many incorrect attempts. Please start again.'); go('?page=forgot-password'); }
+        if ((int)$pending['user_id'] < 1 || strlen($otp) !== 6 || !password_verify($otp,$pending['otp_hash'])) { flash('error','That verification code is incorrect.'); go('?page=verify-password-reset'); }
+        $pending['verified_at'] = time(); unset($pending['otp_hash']); $_SESSION['pending_password_reset'] = $pending; go('?page=reset-password');
+    }
+    if ($action === 'resend_password_reset_otp') {
+        $pending = $_SESSION['pending_password_reset'] ?? null;
+        if (!$pending || (int)$pending['expires_at'] < time()) { unset($_SESSION['pending_password_reset']); flash('error','Your password reset session expired. Please start again.'); go('?page=forgot-password'); }
+        if (time() - (int)$pending['last_sent_at'] < 60) { flash('error','Please wait one minute before requesting another code.'); go('?page=verify-password-reset'); }
+        $otp = (string)random_int(100000,999999);
+        if ((int)$pending['user_id'] > 0) {
+            try { send_password_reset_otp((string)$pending['name'], (string)$pending['email'], $otp); }
+            catch (Throwable $e) { flash('error',$e->getMessage()); go('?page=verify-password-reset'); }
+        }
+        $pending['otp_hash'] = password_hash($otp,PASSWORD_DEFAULT); $pending['expires_at'] = time()+600; $pending['attempts'] = 0; $pending['last_sent_at'] = time(); $pending['verified_at'] = null; $_SESSION['pending_password_reset'] = $pending;
+        flash('success','If that email is registered, a new verification code was sent.'); go('?page=verify-password-reset');
+    }
+    if ($action === 'reset_password') {
+        $pending = $_SESSION['pending_password_reset'] ?? null; $password = $_POST['password'] ?? ''; $confirmation = $_POST['password_confirmation'] ?? '';
+        if (!$pending || (int)($pending['user_id']??0) < 1 || empty($pending['verified_at']) || time()-(int)$pending['verified_at'] > 900) { unset($_SESSION['pending_password_reset']); flash('error','Your verified reset session expired. Please start again.'); go('?page=forgot-password'); }
+        if (strlen($password) < 8) { flash('error','Use a password of at least 8 characters.'); go('?page=reset-password'); }
+        if (!hash_equals($password,$confirmation)) { flash('error','The passwords do not match.'); go('?page=reset-password'); }
+        db()->prepare('UPDATE users SET password_hash=? WHERE id=?')->execute([password_hash($password,PASSWORD_DEFAULT),(int)$pending['user_id']]);
+        unset($_SESSION['pending_password_reset']); session_regenerate_id(true); flash('success','Your password has been changed. You can now log in.'); go('?page=login');
+    }
     if ($action === 'login') {
         $identifier=strtolower(trim($_POST['email'] ?? ''));
         if ($identifier === 'admin') { $s=db()->query('SELECT * FROM users WHERE is_admin=1 ORDER BY id ASC LIMIT 1'); $u=$s->fetch(); }
@@ -329,12 +369,34 @@ if ($page === 'verify-registration') {
     <?php footer_html(); exit;
 }
 
+if ($page === 'forgot-password') {
+    header_html('Forgot password'); ?>
+    <main class="shell auth-wrap"><section class="card auth"><div class="eyebrow">Account recovery</div><h1>Forgot password?</h1><p class="lead">Enter your registered email address and we’ll send a six-digit verification code.</p><form method="post" action="?action=forgot_password"><div class="field"><label for="reset-email">Email address</label><input id="reset-email" name="email" type="email" required autocomplete="email"></div><input type="hidden" name="csrf" value="<?=csrf()?>"><button class="full" type="submit">Send verification code</button></form><p class="muted"><a href="?page=login">Back to login</a></p></section></main>
+    <?php footer_html(); exit;
+}
+
+if ($page === 'verify-password-reset') {
+    $pending = $_SESSION['pending_password_reset'] ?? null;
+    if (!$pending || (int)($pending['expires_at']??0) < time()) { unset($_SESSION['pending_password_reset']); flash('error','Your password reset session expired. Please start again.'); go('?page=forgot-password'); }
+    header_html('Verify password reset'); ?>
+    <main class="shell auth-wrap"><section class="card auth"><div class="eyebrow">Check your inbox</div><h1>Verify your email</h1><p class="lead">If <strong><?=e($pending['email'])?></strong> is registered, we sent a six-digit code. It expires in 10 minutes.</p><form method="post" action="?action=verify_password_reset"><div class="field"><label for="reset-otp">Verification code</label><input id="reset-otp" name="otp" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="000000" required style="font-size:28px;letter-spacing:8px;text-align:center"></div><input type="hidden" name="csrf" value="<?=csrf()?>"><button class="full" type="submit">Verify code</button></form><form method="post" action="?action=resend_password_reset_otp" style="margin-top:10px"><input type="hidden" name="csrf" value="<?=csrf()?>"><button class="button light full" type="submit">Resend code</button></form><p class="muted"><a href="?page=forgot-password">Use a different email</a></p></section></main>
+    <?php footer_html(); exit;
+}
+
+if ($page === 'reset-password') {
+    $pending = $_SESSION['pending_password_reset'] ?? null;
+    if (!$pending || (int)($pending['user_id']??0) < 1 || empty($pending['verified_at']) || time()-(int)$pending['verified_at'] > 900) { unset($_SESSION['pending_password_reset']); flash('error','Your verified reset session expired. Please start again.'); go('?page=forgot-password'); }
+    header_html('Choose a new password'); ?>
+    <main class="shell auth-wrap"><section class="card auth"><div class="eyebrow">Password verified</div><h1>Choose a new password</h1><p class="lead">Use at least eight characters and enter the same password twice.</p><form method="post" action="?action=reset_password"><div class="field"><label for="new-password">New password</label><input id="new-password" name="password" type="password" minlength="8" required autocomplete="new-password"></div><div class="field"><label for="new-password-confirmation">Confirm new password</label><input id="new-password-confirmation" name="password_confirmation" type="password" minlength="8" required autocomplete="new-password"></div><input type="hidden" name="csrf" value="<?=csrf()?>"><button class="full" type="submit">Change password</button></form></section></main>
+    <?php footer_html(); exit;
+}
+
 purge_expired_photos();
 header_html(ucfirst(str_replace('-',' ',$page)));
 if ($page === 'home'): ?>
 <main><section class="shell hero"><div><div class="eyebrow">The crowd is your camera crew</div><h1>Every angle.<br>One story.</h1><p class="lead">Create an event, share one QR code, and let every guest capture the moments only they can see. All photos land in your private gallery automatically.</p><div style="display:flex;gap:10px;margin-top:30px"><a class="button" href="?page=register">Create your event</a><a class="button light" href="#how">See how it works</a></div></div><div class="hero-card"><div class="photo-stack"></div><div class="mini-stat"><div><strong>5</strong><br><span>shots per scan</span></div><div><strong>∞</strong><br><span>guest perspectives</span></div></div></div></section><section class="section" id="how" style="background:#e7e8dc"><div class="shell"><div class="section-head"><div><div class="eyebrow">Simple by design</div><h2>Scan. Shoot. Remember.</h2></div><p class="lead">No app download and no guest account.</p></div><div class="grid-3"><article class="feature"><div class="number">1</div><h3>Create your event</h3><p>Subscribe, add your event details, and receive a unique QR code.</p></article><article class="feature"><div class="number">2</div><h3>Guests scan & snap</h3><p>The QR opens a secure camera page. Each scan captures up to five photos.</p></article><article class="feature"><div class="number">3</div><h3>Watch it unfold</h3><p>Every photo appears in your organizer gallery, ready to revisit.</p></article></div></div></section></main>
 <?php elseif ($page === 'register' || $page === 'login'): $register=$page==='register'; ?>
-<main class="shell auth-wrap"><section class="card auth"><div class="eyebrow"><?=$register?'Your story starts here':'Welcome back'?></div><h1><?=$register?'Create account':'Log in'?></h1><form method="post" action="?action=<?=$page?>"><?php if($register): ?><div class="field"><label for="name">Your name</label><input id="name" name="name" required autocomplete="name"></div><?php endif; ?><div class="field"><label for="email">Email address</label><input id="email" name="email" type="email" required autocomplete="email"></div><div class="field"><label for="password">Password</label><input id="password" name="password" type="password" required minlength="8" autocomplete="<?=$register?'new-password':'current-password'?>"></div><input type="hidden" name="csrf" value="<?=csrf()?>"><button class="full" type="submit"><?=$register?'Continue to plan':'Log in'?></button></form><p class="muted"><?=$register?'Already have an account? <a href="?page=login">Log in</a>':'New here? <a href="?page=register">Create an account</a>'?></p></section></main>
+<main class="shell auth-wrap"><section class="card auth"><div class="eyebrow"><?=$register?'Your story starts here':'Welcome back'?></div><h1><?=$register?'Create account':'Log in'?></h1><form method="post" action="?action=<?=$page?>"><?php if($register): ?><div class="field"><label for="name">Your name</label><input id="name" name="name" required autocomplete="name"></div><?php endif; ?><div class="field"><label for="email">Email address</label><input id="email" name="email" type="email" required autocomplete="email"></div><div class="field"><label for="password">Password</label><input id="password" name="password" type="password" required minlength="8" autocomplete="<?=$register?'new-password':'current-password'?>"></div><?php if(!$register): ?><p style="text-align:right;margin:-5px 0 15px"><a href="?page=forgot-password">Forgot password?</a></p><?php endif; ?><input type="hidden" name="csrf" value="<?=csrf()?>"><button class="full" type="submit"><?=$register?'Continue to plan':'Log in'?></button></form><p class="muted"><?=$register?'Already have an account? <a href="?page=login">Log in</a>':'New here? <a href="?page=register">Create an account</a>'?></p></section></main>
 <?php elseif ($page === 'subscribe'): $u=require_user(); ?>
 <main class="shell auth-wrap"><section class="card auth"><div class="eyebrow">One-event pass</div><h1>One event. Every perspective.</h1><p class="lead">Create one event and collect its guest photos in a private gallery.</p><div style="font-size:46px;font-weight:850;margin:22px 0">₱<?=number_format(cfg('plan_price_centavos')/100)?> <small class="muted" style="font-size:16px">/ event</small></div><form method="post" action="?action=subscribe"><input type="hidden" name="csrf" value="<?=csrf()?>"><button class="full"><?=local_payment_bypass()?'Add local event pass':'Buy event pass with QRPh'?></button></form><?php if(local_payment_bypass()): ?><p class="alert" style="font-size:13px"><strong>Local testing:</strong> Payment is bypassed and no charge will be made.</p><?php else: ?><p class="muted" style="font-size:13px">Each confirmed payment adds one event pass. Scan using a supported Philippine banking or e-wallet app.</p><?php endif; ?></section></main>
 <?php elseif ($page === 'payment-return'): $u=require_user(); refresh_user((int)$u['id']); ?>

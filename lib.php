@@ -102,6 +102,35 @@ function send_registration_otp(string $name, string $email, string $otp): void {
     }
 }
 
+function send_password_reset_otp(string $name, string $email, string $otp): void {
+    $autoload = __DIR__.'/vendor/autoload.php';
+    if (!is_file($autoload)) throw new RuntimeException('Email service is not installed.');
+    require_once $autoload;
+    $smtp = cfg('smtp');
+    $smtpConfigured = is_array($smtp) && filter_var($smtp['from_email'] ?? '', FILTER_VALIDATE_EMAIL) && !empty($smtp['username']) && !empty($smtp['password']);
+    $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
+    try {
+        if ($smtpConfigured) {
+            $mail->isSMTP(); $mail->Host = (string)($smtp['host'] ?? 'smtp.hostinger.com'); $mail->Port = (int)($smtp['port'] ?? 587); $mail->SMTPAuth = true;
+            $mail->Username = (string)$smtp['username']; $mail->Password = (string)$smtp['password'];
+            $mail->SMTPSecure = strtolower((string)($smtp['encryption'] ?? 'tls')) === 'ssl'
+                ? \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS
+                : \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+            $fromEmail = (string)$smtp['from_email']; $fromName = (string)($smtp['from_name'] ?? 'POVents');
+        } else {
+            $mail->isMail(); $host = preg_replace('/^www\./', '', (string)(parse_url((string)cfg('base_url'), PHP_URL_HOST) ?: 'localhost.localdomain'));
+            $fromEmail = 'no-reply@'.$host; $fromName = 'POVents';
+        }
+        $mail->Timeout = 20; $mail->CharSet = 'UTF-8'; $mail->setFrom($fromEmail, $fromName); $mail->addAddress($email, $name); $mail->isHTML(true);
+        $mail->Subject = 'Reset your POVents password'; $safeName = e($name); $safeOtp = e($otp);
+        $mail->Body = '<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17231f"><h1 style="color:#245b45">Reset your POVents password</h1><p>Hello '.$safeName.',</p><p>Use this verification code to reset your password:</p><p style="font-size:36px;font-weight:800;letter-spacing:8px;background:#f4f1e9;padding:18px;text-align:center;border-radius:14px">'.$safeOtp.'</p><p>This code expires in 10 minutes. If you did not request a password reset, you can safely ignore this email.</p></div>';
+        $mail->AltBody = "Hello {$name},\n\nYour POVents password reset code is: {$otp}\n\nThis code expires in 10 minutes.";
+        $mail->send();
+    } catch (\PHPMailer\PHPMailer\Exception $e) {
+        throw new RuntimeException('The password reset email could not be sent. Please try again.');
+    }
+}
+
 function download_event_qr(array $event, string $guestUrl, ?string $backgroundDataUri = null): never {
     $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=900x900&margin=18&data='.rawurlencode($guestUrl);
     $ch = curl_init($qrUrl);
