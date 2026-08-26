@@ -357,7 +357,11 @@
       consent.remove(); document.body.style.overflow = ''; start();
     });
     consent.querySelector('[data-consent-leave]').addEventListener('click', () => {
-      if (history.length > 1) history.back(); else location.replace('about:blank');
+      cameraRequestId++;
+      if (stream) stream.getTracks().forEach(track => track.stop());
+      stream = null; video.srcObject = null;
+      try { sessionStorage.removeItem(consentKey); } catch (_) {}
+      location.replace(location.pathname);
     });
     document.body.style.overflow = 'hidden';
     document.body.appendChild(consent);

@@ -7,7 +7,7 @@ ob_start(static function (string $html): string {
     $html = str_replace('<span class="brand"><img src="assets/povents-logo.png" alt="POVents"></span>', '<span class="brand"><img src="assets/povents-logo-dark.png" alt="POVents"></span>', $html);
     $html = str_replace('<footer class="shell section muted">POVents', '<footer class="shell section muted"><img class="footer-logo" src="assets/povents-logo.png" alt="POVents">', $html);
     $html = str_replace('<section class="card" style="text-align:center;color:#17231f"><div class="eyebrow">', '<section class="card" style="text-align:center;color:#17231f"><img class="message-logo" src="assets/povents-logo.png" alt="POVents"><div class="eyebrow">', $html);
-    $html = str_replace('assets/app.js?v=5', 'assets/app.js?v=6', $html);
+    $html = str_replace(['assets/app.js?v=5','assets/app.js?v=6'], 'assets/app.js?v=7', $html);
     if (str_contains($html, 'id="guest-link"') && isset($_GET['id'])) {
         $downloadButton = '<p class="event-downloads"><a class="button light" href="?action=download_event_qr&amp;event_id='.(int)$_GET['id'].'">Download branded QR image</a></p>';
         $html = preg_replace('~(<div class="copyline">.*?</div>)~s', '$1'.$downloadButton, $html, 1) ?? $html;
@@ -117,7 +117,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$u || !password_verify($_POST['password'] ?? '', $u['password_hash'])) { flash('error','Email or password is incorrect.'); go('?page=login'); }
         refresh_user((int)$u['id']); go('?page=dashboard');
     }
-    if ($action === 'logout') { session_destroy(); go('?'); }
+    if ($action === 'logout') {
+        $_SESSION = [];
+        if (ini_get('session.use_cookies')) {
+            $cookie = session_get_cookie_params();
+            setcookie(session_name(), '', [
+                'expires'=>time()-42000,'path'=>$cookie['path'],'domain'=>$cookie['domain'],
+                'secure'=>$cookie['secure'],'httponly'=>$cookie['httponly'],'samesite'=>'Lax',
+            ]);
+        }
+        session_destroy();
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        go('?');
+    }
     if ($action === 'subscribe') {
         $u=require_user();
         if (local_payment_bypass()) {
