@@ -12,7 +12,13 @@
   lastPhoto.alt = 'Most recently captured photo';
   Object.assign(lastPhoto.style, {position: 'absolute', inset: '0', width: '100%', height: '100%', objectFit: 'cover', display: 'none', pointerEvents: 'none', zIndex: '1'});
   camera.insertBefore(lastPhoto, camera.querySelector('.camera-controls'));
-  camera.querySelector('.camera-controls').style.zIndex = '3';
+  const normalControls = camera.querySelector('.camera-controls');
+  normalControls.style.zIndex = '3';
+  const reviewControls = document.createElement('div');
+  reviewControls.className = 'capture-review';
+  reviewControls.hidden = true;
+  reviewControls.innerHTML = '<button type="button" data-retake>Retake</button><button type="button" data-approve>Use photo</button>';
+  camera.appendChild(reviewControls);
   const galleryTitle = document.createElement('div');
   galleryTitle.innerHTML = '<strong>Your shots</strong><span>Photos save automatically</span>';
   Object.assign(galleryTitle.style, {display: 'none', justifyContent: 'space-between', alignItems: 'center', marginTop: '18px', color: '#fff'});
@@ -26,6 +32,8 @@
   let remaining = Number(camera.dataset.remaining || 5);
   let nativeCapture = false;
   const maxPhotoBytes = 1536 * 1024;
+  let pendingPhoto = null;
+  let pendingPreviewUrl = '';
 
   const setStatus = (message, error = false) => {
     status.textContent = message;
@@ -95,7 +103,7 @@
     } catch (error) {
       setStatus(error.message || 'Could not prepare this photo.', true);
       capture.disabled = false;
-      return;
+      return false;
     }
     const form = new FormData();
     form.append('photo', blob, 'moment.jpg');
@@ -119,10 +127,47 @@
       galleryTitle.style.display = 'flex';
       setStatus(remaining ? `${remaining} photo${remaining === 1 ? '' : 's'} remaining` : 'All 5 moments captured — thank you!');
       capture.disabled = remaining < 1;
+      return true;
     } catch (error) {
       setStatus(error.message, true); capture.disabled = false;
+      return false;
     }
   }
+
+  function review(blob) {
+    pendingPhoto = blob;
+    if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
+    pendingPreviewUrl = URL.createObjectURL(blob);
+    lastPhoto.src = pendingPreviewUrl;
+    lastPhoto.style.display = 'block';
+    normalControls.style.display = 'none';
+    reviewControls.hidden = false;
+    setStatus('Keep this photo or retake it?');
+  }
+
+  function finishReview(keepPreview = false) {
+    if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
+    pendingPreviewUrl = '';
+    pendingPhoto = null;
+    reviewControls.hidden = true;
+    normalControls.style.display = 'flex';
+    if (!keepPreview) lastPhoto.style.display = 'none';
+  }
+
+  reviewControls.querySelector('[data-retake]').addEventListener('click', () => {
+    finishReview(false);
+    capture.disabled = remaining < 1;
+    setStatus(`${remaining} photo${remaining === 1 ? '' : 's'} remaining`);
+  });
+
+  reviewControls.querySelector('[data-approve]').addEventListener('click', async event => {
+    if (!pendingPhoto) return;
+    event.currentTarget.disabled = true;
+    setStatus('Uploading approved photo…');
+    const uploaded = await upload(pendingPhoto);
+    event.currentTarget.disabled = false;
+    if (uploaded) finishReview(true);
+  });
 
   capture.addEventListener('click', async () => {
     if (remaining < 1) return;
@@ -151,11 +196,11 @@
       canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
       blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 1));
     }
-    await upload(blob);
+    review(blob);
   });
 
   fileCamera.addEventListener('change', async () => {
-    if (fileCamera.files?.[0]) await upload(fileCamera.files[0]);
+    if (fileCamera.files?.[0]) review(fileCamera.files[0]);
     fileCamera.value = '';
   });
 

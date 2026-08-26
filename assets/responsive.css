@@ -25,6 +25,10 @@ button,.button,input{min-height:44px}
 .photo-modal__close{position:absolute;right:20px;top:20px;z-index:2;font-size:25px}
 .photo-modal__meta{display:flex;align-items:center;gap:14px;font-size:13px;color:#cbd4cf}
 .photo-modal__download{color:#17231f;background:#dff25f;padding:8px 14px;border-radius:999px;text-decoration:none;font-weight:800}
+.capture-review{position:absolute;z-index:4;left:16px;right:16px;bottom:18px;display:grid;grid-template-columns:1fr 1.4fr;gap:10px;padding:10px;background:#07100dcc;border:1px solid #ffffff2b;border-radius:18px;backdrop-filter:blur(10px)}
+.capture-review[hidden]{display:none}
+.capture-review button{border-radius:13px;background:#ffffff25;color:#fff}
+.capture-review [data-approve]{background:#dff25f;color:#17231f}
 
 @media (max-width:760px){
   .shell{width:calc(100% - 24px)}
