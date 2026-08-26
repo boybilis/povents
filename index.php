@@ -13,7 +13,7 @@ ob_start(static function (string $html): string {
     }
     return str_replace(
         ['</head>','</body>'],
-        ['<link rel="icon" href="assets/povents-logo.png"><link rel="stylesheet" href="assets/responsive.css?v=7"></head>','<script src="assets/gallery.js?v=3"></script></body>'],
+        ['<link rel="icon" href="assets/povents-logo.png"><link rel="stylesheet" href="assets/responsive.css?v=8"></head>','<script src="assets/gallery.js?v=4"></script></body>'],
         $html
     );
 });
@@ -32,6 +32,19 @@ if ($action === 'download_photo_album') {
     $event = event_for_owner((int)($_GET['event_id'] ?? 0), (int)$u['id']);
     if (!$event) { http_response_code(404); exit('Event not found.'); }
     download_photo_album($event);
+}
+if ($action === 'shared_album_link') {
+    header('Content-Type: application/json');
+    $u = require_user();
+    $event = event_for_owner((int)($_GET['event_id'] ?? 0), (int)$u['id']);
+    if (!$event) { http_response_code(404); echo json_encode(['error'=>'Event not found.']); exit; }
+    echo json_encode(['url'=>shared_album_url($event)], JSON_UNESCAPED_SLASHES); exit;
+}
+if ($action === 'download_shared_album') {
+    $eventId = (int)($_GET['event_id'] ?? 0); $expires = (int)($_GET['expires'] ?? 0); $signature = (string)($_GET['signature'] ?? '');
+    $s = db()->prepare('SELECT * FROM events WHERE id=? AND is_active=1'); $s->execute([$eventId]); $event = $s->fetch();
+    if (!$event || $expires < time() || !hash_equals(shared_album_signature($event, $expires), $signature)) { http_response_code(410); exit('This shared photo album link is invalid or has expired.'); }
+    download_photo_album($event, true);
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

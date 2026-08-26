@@ -89,11 +89,25 @@ function download_event_qr(array $event, string $guestUrl): never {
     echo $svg; exit;
 }
 
-function download_photo_album(array $event): never {
+function shared_album_signature(array $event, int $expires): string {
+    $secret = (string)cfg('cron_secret');
+    if (strlen($secret) < 32) throw new RuntimeException('Set a long cron_secret before creating shareable album links.');
+    return hash_hmac('sha256', $event['id'].'|'.$expires.'|'.$event['token'], $secret);
+}
+
+function shared_album_url(array $event): string {
+    $expires = (new DateTimeImmutable($event['event_date'].' 23:59:59'))->modify('+'.(int)cfg('photo_retention_days').' days')->getTimestamp();
+    return url('?action=download_shared_album&event_id='.$event['id'].'&expires='.$expires.'&signature='.shared_album_signature($event, $expires));
+}
+
+function download_photo_album(array $event, bool $shared = false): never {
     $s = db()->prepare('SELECT file_name,mime_type,created_at FROM photos WHERE event_id=? AND expires_at>NOW() ORDER BY created_at ASC');
     $s->execute([$event['id']]);
     $photos = array_values(array_filter($s->fetchAll(), static fn(array $photo): bool => is_file(__DIR__.'/uploads/'.$event['id'].'/'.basename($photo['file_name']))));
-    if (!$photos) { flash('error', 'This event does not have any available photos yet.'); go('?page=event&id='.$event['id']); }
+    if (!$photos) {
+        if ($shared) { http_response_code(404); exit('This photo album does not have any available photos.'); }
+        flash('error', 'This event does not have any available photos yet.'); go('?page=event&id='.$event['id']);
+    }
     if (!extension_loaded('gd')) { http_response_code(500); exit('Photo album compression is not enabled on this server. Enable the PHP GD extension and try again.'); }
     $byOrientation = ['portrait'=>[], 'landscape'=>[]];
     foreach ($photos as $photo) {

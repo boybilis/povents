@@ -9,11 +9,25 @@
   toolbar.id = 'gallery-download';
   toolbar.method = 'post';
   toolbar.action = '?action=download_zip';
-  toolbar.innerHTML = `<input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="event_id" value="${eventId || ''}"><label><input type="checkbox" data-select-all> Select all</label><span data-selected>0 selected</span><button type="submit" disabled>Download ZIP</button><a class="button light album-download" href="?action=download_photo_album&amp;event_id=${encodeURIComponent(eventId || '')}">Download photo album</a>`;
+  toolbar.innerHTML = `<input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="event_id" value="${eventId || ''}"><label><input type="checkbox" data-select-all> Select all</label><span data-selected>0 selected</span><button type="submit" disabled>Download ZIP</button><a class="button light album-download" href="?action=download_photo_album&amp;event_id=${encodeURIComponent(eventId || '')}">Download photo album</a><button class="button light album-share" type="button">Copy shareable album link</button>`;
   document.querySelector('.gallery').before(toolbar);
   const selectedLabel = toolbar.querySelector('[data-selected]');
   const downloadButton = toolbar.querySelector('button');
   const selectAll = toolbar.querySelector('[data-select-all]');
+  const shareButton = toolbar.querySelector('.album-share');
+  shareButton.addEventListener('click', async () => {
+    shareButton.disabled = true;
+    try {
+      const response = await fetch(`?action=shared_album_link&event_id=${encodeURIComponent(eventId || '')}`, {headers: {'Accept': 'application/json'}});
+      const data = await response.json();
+      if (!response.ok || !data.url) throw new Error(data.error || 'Could not create the share link.');
+      await navigator.clipboard.writeText(data.url);
+      shareButton.textContent = 'Album link copied!';
+      setTimeout(() => { shareButton.textContent = 'Copy shareable album link'; }, 2500);
+    } catch (error) {
+      shareButton.textContent = error.message || 'Copy failed';
+    } finally { shareButton.disabled = false; }
+  });
 
   const checks = links.map(link => {
     const fileName = decodeURIComponent(new URL(link.href).pathname.split('/').pop());
