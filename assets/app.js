@@ -17,8 +17,13 @@
   const reviewControls = document.createElement('div');
   reviewControls.className = 'capture-review';
   reviewControls.hidden = true;
-  reviewControls.innerHTML = '<button type="button" data-retake>Retake</button><button type="button" data-approve>Use photo</button>';
+  reviewControls.innerHTML = '<input type="text" data-caption maxlength="30" placeholder="Add a caption (optional)" aria-label="Photo caption, maximum 30 characters"><button type="button" data-retake>Retake</button><button type="button" data-approve>Use photo</button>';
   camera.appendChild(reviewControls);
+  const watermarkPreview = document.createElement('div');
+  watermarkPreview.className = 'watermark-preview';
+  watermarkPreview.hidden = true;
+  camera.appendChild(watermarkPreview);
+  const captionInput = reviewControls.querySelector('[data-caption]');
   const galleryTitle = document.createElement('div');
   galleryTitle.innerHTML = '<strong>Your shots</strong><span>Photos save automatically</span>';
   Object.assign(galleryTitle.style, {display: 'none', justifyContent: 'space-between', alignItems: 'center', marginTop: '18px', color: '#fff'});
@@ -112,6 +117,26 @@
     return result;
   }
 
+  async function addWatermark(blob, caption) {
+    const bitmap = await createImageBitmap(blob);
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext('2d');
+    context.drawImage(bitmap, 0, 0);
+    const fontSize = Math.max(22, Math.min(54, Math.round(bitmap.width * .035)));
+    const padding = Math.round(fontSize * .7);
+    const text = caption ? `POVents  •  ${caption}` : 'POVents';
+    context.font = `700 ${fontSize}px system-ui, sans-serif`;
+    context.textBaseline = 'middle';
+    const barHeight = fontSize + padding * 1.5;
+    context.fillStyle = 'rgba(4, 12, 9, .64)';
+    context.fillRect(0, bitmap.height - barHeight, bitmap.width, barHeight);
+    context.fillStyle = '#ffffff';
+    context.fillText(text, padding, bitmap.height - barHeight / 2, bitmap.width - padding * 2);
+    bitmap.close?.();
+    return await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 1));
+  }
+
   async function upload(blob) {
     capture.disabled = true;
     try {
@@ -164,6 +189,9 @@
     reviewControls.style.display = 'grid';
     reviewControls.style.pointerEvents = 'auto';
     reviewControls.querySelectorAll('button').forEach(button => { button.disabled = false; });
+    captionInput.value = '';
+    watermarkPreview.textContent = 'POVents';
+    watermarkPreview.hidden = false;
     setStatus('Keep this photo or retake it?');
   }
 
@@ -174,6 +202,7 @@
     reviewControls.hidden = true;
     reviewControls.style.display = 'none';
     reviewControls.style.pointerEvents = 'none';
+    watermarkPreview.hidden = true;
     normalControls.style.display = 'flex';
     if (!keepPreview) lastPhoto.style.display = 'none';
   }
@@ -184,13 +213,28 @@
     setStatus(`${remaining} photo${remaining === 1 ? '' : 's'} remaining`);
   });
 
+  captionInput.addEventListener('input', () => {
+    captionInput.value = captionInput.value.slice(0, 30);
+    watermarkPreview.textContent = captionInput.value ? `POVents  •  ${captionInput.value}` : 'POVents';
+  });
+
   reviewControls.querySelector('[data-approve]').addEventListener('click', async () => {
     if (!pendingPhoto) return;
     const approvedPhoto = pendingPhoto;
+    const caption = captionInput.value.trim().slice(0, 30);
     const approvedPreviewUrl = pendingPreviewUrl;
     finishReview(true);
+    setStatus('Adding watermark…');
+    let watermarkedPhoto;
+    try { watermarkedPhoto = await addWatermark(approvedPhoto, caption); }
+    catch (_) {
+      if (approvedPreviewUrl) URL.revokeObjectURL(approvedPreviewUrl);
+      review(approvedPhoto);
+      setStatus('Could not add the watermark. Please try again.', true);
+      return;
+    }
     setStatus('Uploading approved photo…');
-    const uploaded = await upload(approvedPhoto);
+    const uploaded = await upload(watermarkedPhoto);
     if (approvedPreviewUrl) URL.revokeObjectURL(approvedPreviewUrl);
     if (!uploaded) review(approvedPhoto);
   });

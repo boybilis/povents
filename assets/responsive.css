@@ -29,6 +29,10 @@ button,.button,input{min-height:44px}
 .capture-review[hidden]{display:none}
 .capture-review button{border-radius:13px;background:#ffffff25;color:#fff}
 .capture-review [data-approve]{background:#dff25f;color:#17231f}
+.capture-review [data-caption]{grid-column:1/-1;width:100%;border:1px solid #ffffff30;background:#ffffff18;color:#fff;border-radius:12px;padding:11px 13px;font:inherit}
+.capture-review [data-caption]::placeholder{color:#ffffff9c}
+.watermark-preview{position:absolute;z-index:3;left:0;right:0;bottom:115px;padding:13px 20px;background:#040c09a3;color:#fff;font-weight:800;text-shadow:0 1px 3px #000;pointer-events:none}
+.watermark-preview[hidden]{display:none}
 
 @media (max-width:760px){
   .shell{width:calc(100% - 24px)}
