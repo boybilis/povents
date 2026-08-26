@@ -6,6 +6,7 @@ DirectoryIndex index.php
 </FilesMatch>
 
 RewriteEngine On
+RewriteRule ^webhook/?$ webhook.php [L,NC]
 RewriteRule ^vendor(?:/|$) - [F,L,NC]
 RewriteRule ^uploads/.*\.(php|phtml|phar)$ - [F,L,NC]
 
