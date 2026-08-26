@@ -2,14 +2,15 @@
 declare(strict_types=1);
 require __DIR__ . '/lib.php';
 $raw = file_get_contents('php://input');
+$payload = json_decode($raw,true);
 $signature = $_SERVER['HTTP_PAYMONGO_SIGNATURE'] ?? '';
 $parts = [];
 foreach (explode(',', $signature) as $part) { [$k,$v] = array_pad(explode('=',trim($part),2),2,''); $parts[$k]=$v; }
 $timestamp = $parts['t'] ?? '';
 $expected = hash_hmac('sha256', $timestamp . '.' . $raw, (string)cfg('paymongo_webhook_secret'));
-$provided = $parts['li'] ?? $parts['te'] ?? '';
+$liveMode = (bool)($payload['data']['attributes']['livemode'] ?? false);
+$provided = $liveMode ? ($parts['li'] ?? '') : ($parts['te'] ?? '');
 if (!$timestamp || abs(time()-(int)$timestamp)>300 || !$provided || !hash_equals($expected,$provided)) { http_response_code(401); exit('Invalid signature'); }
-$payload = json_decode($raw,true);
 $type = $payload['data']['attributes']['type'] ?? '';
 if ($type === 'checkout_session.payment.paid') {
     $checkout = $payload['data']['attributes']['data']['id'] ?? '';
