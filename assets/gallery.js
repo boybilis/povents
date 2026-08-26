@@ -52,6 +52,36 @@
   const shareButton = toolbar.querySelector('.album-share');
   bindAlbumShare(shareButton, eventId);
 
+  const deleteModal = document.createElement('div');
+  deleteModal.className = 'delete-modal';
+  deleteModal.hidden = true;
+  deleteModal.setAttribute('role', 'dialog');
+  deleteModal.setAttribute('aria-modal', 'true');
+  deleteModal.setAttribute('aria-labelledby', 'delete-photo-title');
+  deleteModal.innerHTML = `<div class="delete-modal__panel"><img class="delete-modal__preview" alt="Photo selected for deletion"><div class="delete-modal__content"><div class="eyebrow">Permanent deletion</div><h2 id="delete-photo-title">Delete this photo?</h2><p>This image will be erased from the server and removed from the event gallery. This action cannot be undone.</p><div class="delete-modal__actions"><button class="button light" type="button" data-delete-cancel>Cancel</button><button class="button delete-modal__confirm" type="button" data-delete-confirm>Delete permanently</button></div></div></div>`;
+  document.body.appendChild(deleteModal);
+  const deletePreview = deleteModal.querySelector('.delete-modal__preview');
+  const deleteCancel = deleteModal.querySelector('[data-delete-cancel]');
+  const deleteConfirm = deleteModal.querySelector('[data-delete-confirm]');
+  let pendingDeleteForm = null;
+  let deleteTrigger = null;
+  function closeDeleteModal() {
+    deleteModal.hidden = true;
+    deletePreview.removeAttribute('src');
+    document.body.style.overflow = '';
+    deleteTrigger?.focus();
+    pendingDeleteForm = null;
+  }
+  deleteCancel.addEventListener('click', closeDeleteModal);
+  deleteConfirm.addEventListener('click', () => {
+    if (!pendingDeleteForm) return;
+    deleteConfirm.disabled = true;
+    deleteConfirm.textContent = 'Deleting…';
+    pendingDeleteForm.submit();
+  });
+  deleteModal.addEventListener('click', event => { if (event.target === deleteModal) closeDeleteModal(); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && !deleteModal.hidden) closeDeleteModal(); });
+
   const checks = links.map(link => {
     const fileName = decodeURIComponent(new URL(link.href).pathname.split('/').pop());
     const label = document.createElement('label');
@@ -64,7 +94,15 @@
     deleteForm.action = '?action=delete_photo';
     deleteForm.innerHTML = `<input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="event_id" value="${eventId || ''}"><input type="hidden" name="file_name" value="${fileName}"><button type="submit" aria-label="Permanently delete this photo" title="Delete photo">×</button>`;
     deleteForm.addEventListener('submit', event => {
-      if (!confirm('Permanently delete this photo? It will be erased from the server and cannot be recovered.')) event.preventDefault();
+      event.preventDefault();
+      pendingDeleteForm = deleteForm;
+      deleteTrigger = deleteForm.querySelector('button');
+      deletePreview.src = link.href;
+      deleteConfirm.disabled = false;
+      deleteConfirm.textContent = 'Delete permanently';
+      deleteModal.hidden = false;
+      document.body.style.overflow = 'hidden';
+      deleteCancel.focus();
     });
     link.closest('.shot').appendChild(deleteForm);
     const check = label.querySelector('input');
