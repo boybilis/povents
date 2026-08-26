@@ -3,10 +3,10 @@ declare(strict_types=1);
 session_start();
 require __DIR__ . '/lib.php';
 ob_start(static function (string $html): string {
-    $html = str_replace('<i></i>POVents', '<img src="assets/povents-logo.png?v=4" alt="POVents">', $html);
-    $html = str_replace('<span class="brand"><img src="assets/povents-logo.png?v=4" alt="POVents"></span>', '<span class="brand"><img src="assets/povents-logo-dark.png?v=4" alt="POVents"></span>', $html);
-    $html = str_replace('<footer class="shell section muted">POVents', '<footer class="shell section muted"><img class="footer-logo" src="assets/povents-logo.png?v=4" alt="POVents">', $html);
-    $html = str_replace('<section class="card" style="text-align:center;color:#17231f"><div class="eyebrow">', '<section class="card" style="text-align:center;color:#17231f"><img class="message-logo" src="assets/povents-logo.png?v=4" alt="POVents"><div class="eyebrow">', $html);
+    $html = str_replace('<i></i>POVents', '<img src="assets/povents-logo.png?v=5" alt="POVents">', $html);
+    $html = str_replace('<span class="brand"><img src="assets/povents-logo.png?v=5" alt="POVents"></span>', '<span class="brand"><img src="assets/povents-logo-dark.png?v=5" alt="POVents"></span>', $html);
+    $html = str_replace('<footer class="shell section muted">POVents', '<footer class="shell section muted"><img class="footer-logo" src="assets/povents-logo.png?v=5" alt="POVents">', $html);
+    $html = str_replace('<section class="card" style="text-align:center;color:#17231f"><div class="eyebrow">', '<section class="card" style="text-align:center;color:#17231f"><img class="message-logo" src="assets/povents-logo.png?v=5" alt="POVents"><div class="eyebrow">', $html);
     if (str_contains($html, 'action="?action=login"')) {
         $html = str_replace('<label for="email">Email address</label><input id="email" name="email" type="email"', '<label for="email">Email or admin username</label><input id="email" name="email" type="text"', $html);
     }
@@ -34,7 +34,7 @@ ob_start(static function (string $html): string {
     }
     return str_replace(
         ['</head>','</body>'],
-        ['<link rel="icon" href="assets/povents-logo.png?v=4"><link rel="stylesheet" href="assets/responsive.css?v=10"></head>','<script src="assets/gallery.js?v=6"></script></body>'],
+        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=10"></head>','<script src="assets/gallery.js?v=6"></script></body>'],
         $html
     );
 });
