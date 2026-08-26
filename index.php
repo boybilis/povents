@@ -10,7 +10,10 @@ ob_start(static function (string $html): string {
     if (str_contains($html, 'action="?action=login"')) {
         $html = str_replace('<label for="email">Email address</label><input id="email" name="email" type="email"', '<label for="email">Email or admin username</label><input id="email" name="email" type="text"', $html);
     }
-    if (str_contains($html, 'action="?action=register"')) $html = str_replace('>Continue to plan</button>', '>Send verification code</button>', $html);
+    if (str_contains($html, 'action="?action=register"')) {
+        $html = str_replace('>Continue to plan</button>', '>Send verification code</button>', $html);
+        $html = str_replace('<input id="password" name="password" type="password" required minlength="8" autocomplete="new-password"></div><input type="hidden"', '<input id="password" name="password" type="password" required minlength="8" autocomplete="new-password"></div><div class="field"><label for="password_confirmation">Confirm password</label><input id="password_confirmation" name="password_confirmation" type="password" required minlength="8" autocomplete="new-password"></div><input type="hidden"', $html);
+    }
     if (($currentUser = user()) && is_admin($currentUser)) {
         $html = preg_replace('~<span>Event passes</span><strong>.*?</strong>~', '<span>Admin access</span><strong>Unlimited</strong>', $html, 1) ?? $html;
     }
@@ -114,8 +117,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         readfile($zipPath); @unlink($zipPath); exit;
     }
     if ($action === 'register') {
-        $name = trim($_POST['name'] ?? ''); $email = strtolower(trim($_POST['email'] ?? '')); $password = $_POST['password'] ?? '';
+        $name = trim($_POST['name'] ?? ''); $email = strtolower(trim($_POST['email'] ?? '')); $password = $_POST['password'] ?? ''; $passwordConfirmation = $_POST['password_confirmation'] ?? '';
         if (strlen($name) < 2 || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($password) < 8) { flash('error','Use a valid name, email, and a password of at least 8 characters.'); go('?page=register'); }
+        if (!hash_equals($password, $passwordConfirmation)) { flash('error','The passwords do not match. Please try again.'); go('?page=register'); }
         $s=db()->prepare('SELECT id FROM users WHERE email=?'); $s->execute([$email]);
         if ($s->fetchColumn()) { flash('error','That email is already registered.'); go('?page=register'); }
         $otp=(string)random_int(100000,999999);
