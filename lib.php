@@ -17,8 +17,10 @@ function cfg(?string $key = null): mixed {
 
 function event_day_status(array $event): string {
     if (!$event['event_date']) return 'open';
-    $today = (new DateTimeImmutable('today'))->format('Y-m-d');
-    return $today < $event['event_date'] ? 'upcoming' : ($today > $event['event_date'] ? 'finished' : 'open');
+    $now = new DateTimeImmutable('now');
+    $start = new DateTimeImmutable($event['event_date'] . ' ' . ($event['start_time'] ?? '00:00:00'));
+    $end = new DateTimeImmutable($event['event_date'] . ' ' . ($event['end_time'] ?? '23:59:59'));
+    return $now < $start ? 'upcoming' : ($now > $end ? 'finished' : 'open');
 }
 
 function db(): PDO {

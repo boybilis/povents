@@ -14,6 +14,8 @@ CREATE TABLE events (
   user_id INT UNSIGNED NOT NULL,
   title VARCHAR(160) NOT NULL,
   event_date DATE NULL,
+  start_time TIME NOT NULL DEFAULT '00:00:00',
+  end_time TIME NOT NULL DEFAULT '23:59:59',
   location VARCHAR(190) NULL,
   token CHAR(32) NOT NULL UNIQUE,
   is_active TINYINT(1) NOT NULL DEFAULT 1,

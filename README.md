@@ -13,7 +13,7 @@
 
 ## Existing installation
 
-If the original schema was already imported, run `migrate-v2.sql` and then `migrate-v3.sql` once instead of importing `schema.sql` again.
+If the original schema was already imported, run `migrate-v2.sql`, `migrate-v3.sql`, and then `migrate-v4.sql` once instead of importing `schema.sql` again.
 
 ## Payments and retention
 
@@ -21,6 +21,6 @@ The checkout uses PayMongo-hosted QRPh payment pages. Each confirmed payment add
 
 Every photo expires at the end of the seventh day after its event date. The organizer gallery shows the remaining time; the hourly cleanup permanently removes both expired database records and physical image files so they no longer consume server storage.
 
-The guest camera opens only on the event date using the configured `Asia/Manila` timezone. Before that date the page shows when to return; starting the following day it reports that the event is finished and rejects further uploads.
+The guest camera opens only between the event's start and end time using the configured `Asia/Manila` timezone. Before the window the page shows when to return; after it ends the page reports that the event is finished and rejects further uploads.
 
 Camera access requires HTTPS, which Hostinger provides through SSL. Uploaded files are type-checked, randomly named, and executable file types are blocked by `.htaccess`.
