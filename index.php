@@ -17,6 +17,7 @@ ob_start(static function (string $html): string {
     if (($currentUser = user()) && is_admin($currentUser)) {
         $html = preg_replace('~<span>Event passes</span><strong>.*?</strong>~', '<span>Admin access</span><strong>Unlimited</strong>', $html, 1) ?? $html;
     }
+    $html = str_replace(['Your Creator plan activates automatically','Check my plan'], ['Your event pass is added automatically','Check my event passes'], $html);
     $html = str_replace(['assets/app.js?v=5','assets/app.js?v=6'], 'assets/app.js?v=7', $html);
     if (str_contains($html, 'id="guest-link"') && isset($_GET['id'])) {
         $downloadButton = '<p class="event-downloads"><a class="button light" href="?action=download_event_qr&amp;event_id='.(int)$_GET['id'].'">Download branded QR image</a></p>';
@@ -136,7 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (strlen($otp)!==6 || !password_verify($otp,$pending['otp_hash'])) { flash('error','That verification code is incorrect.'); go('?page=verify-registration'); }
         try {
             $s=db()->prepare('INSERT INTO users(name,email,password_hash) VALUES(?,?,?)'); $s->execute([$pending['name'],$pending['email'],$pending['password_hash']]);
-            $userId=(int)db()->lastInsertId(); unset($_SESSION['pending_registration']); session_regenerate_id(true); refresh_user($userId); go('?page=subscribe');
+            $userId=(int)db()->lastInsertId(); unset($_SESSION['pending_registration']); session_regenerate_id(true); refresh_user($userId); go('?page=dashboard');
         } catch(PDOException $e) { unset($_SESSION['pending_registration']); flash('error','That email is already registered.'); go('?page=login'); }
     }
     if ($action === 'resend_registration_otp') {
@@ -173,7 +174,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $u=require_user();
         if (is_admin($u)) go('?page=dashboard');
         if (local_payment_bypass()) {
-            db()->prepare("UPDATE users SET subscription_status='active',event_credits=event_credits+1,subscription_ends_at=DATE_ADD(NOW(),INTERVAL ? DAY) WHERE id=?")->execute([(int)cfg('plan_days'),$u['id']]);
+            db()->prepare("UPDATE users SET subscription_status='active',event_credits=event_credits+1,subscription_ends_at=NULL WHERE id=?")->execute([$u['id']]);
             refresh_user((int)$u['id']);
             flash('success','Local test plan activated. No payment was charged.');
             go('?page=dashboard');
@@ -182,7 +183,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $reference='povents-user-'.$u['id'].'-'.bin2hex(random_bytes(5));
             $result=paymongo('POST','checkout_sessions',['data'=>['attributes'=>[
                 'billing'=>['name'=>$u['name'],'email'=>$u['email']],
-                'line_items'=>[['currency'=>'PHP','amount'=>(int)cfg('plan_price_centavos'),'name'=>'POVents Creator — 30 days','quantity'=>1]],
+                'line_items'=>[['currency'=>'PHP','amount'=>(int)cfg('plan_price_centavos'),'name'=>'POVents One Event Pass','quantity'=>1]],
                 'payment_method_types'=>['qrph'],
                 'description'=>'Create events and collect every guest perspective.',
                 'reference_number'=>$reference,
@@ -207,7 +208,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$startParsed || !$endParsed || $startParsed->format('H:i')!==$startTime || $endParsed->format('H:i')!==$endTime || $endTime<=$startTime) { flash('error','Choose valid event times. The end time must be later than the start time.'); go('?page=new-event'); }
         db()->beginTransaction();
         if (!is_admin($u)) {
-            $credit=db()->prepare("SELECT event_credits FROM users WHERE id=? AND subscription_status='active' AND event_credits>0 AND (subscription_ends_at IS NULL OR subscription_ends_at>NOW()) FOR UPDATE");
+            $credit=db()->prepare("SELECT event_credits FROM users WHERE id=? AND event_credits>0 FOR UPDATE");
             $credit->execute([$u['id']]);
             if ($credit->fetchColumn() === false) { db()->rollBack(); go('?page=subscribe'); }
         }

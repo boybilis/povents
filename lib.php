@@ -48,7 +48,7 @@ function flash(string $type, string $message): void { $_SESSION['flash'] = compa
 function pull_flash(): ?array { $f = $_SESSION['flash'] ?? null; unset($_SESSION['flash']); return $f; }
 function is_admin(array $u): bool { return (int)($u['is_admin'] ?? 0) === 1; }
 function active_subscription(array $u): bool {
-    return is_admin($u) || ($u['subscription_status'] === 'active' && (int)($u['event_credits'] ?? 0) > 0 && (!$u['subscription_ends_at'] || strtotime($u['subscription_ends_at']) > time()));
+    return is_admin($u) || (int)($u['event_credits'] ?? 0) > 0;
 }
 function local_payment_bypass(): bool {
     if (cfg('local_payment_bypass') !== true) return false;

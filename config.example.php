@@ -24,7 +24,6 @@ return [
     // Keep false on Hostinger. This is only for local development.
     'local_payment_bypass' => false,
     'plan_price_centavos' => 69900,
-    'plan_days' => 30,
     'photo_retention_days' => 7,
     'cron_secret' => 'replace-with-a-long-random-string',
     'max_photos_per_session' => 5,
