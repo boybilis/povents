@@ -28,11 +28,12 @@
   toolbar.id = 'gallery-download';
   toolbar.method = 'post';
   toolbar.action = '?action=download_zip';
-  toolbar.innerHTML = `<input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="event_id" value="${eventId || ''}"><label><input type="checkbox" data-select-all> Select page</label><span data-selected>0 selected</span><button type="submit" disabled>Download ZIP</button><a class="button light album-download" href="?action=download_photo_album&amp;event_id=${encodeURIComponent(eventId || '')}">Download photo album</a><button class="button light album-share" type="button">Copy shareable album link</button>`;
+  toolbar.innerHTML = `<input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="event_id" value="${eventId || ''}"><input type="hidden" name="all_photos" value="1" data-all-photos disabled><label><input type="checkbox" data-select-all> Select all photos</label><span data-selected>0 selected</span><button type="submit" disabled>Download ZIP</button><a class="button light album-download" href="?action=download_photo_album&amp;event_id=${encodeURIComponent(eventId || '')}">Download photo album</a><button class="button light album-share" type="button">Copy shareable album link</button>`;
   document.querySelector('.gallery').before(toolbar);
   const selectedLabel = toolbar.querySelector('[data-selected]');
   const downloadButton = toolbar.querySelector('button');
   const selectAll = toolbar.querySelector('[data-select-all]');
+  const allPhotos = toolbar.querySelector('[data-all-photos]');
   const gallery = document.querySelector('.gallery');
   const shots = links.map(link => link.closest('.shot'));
   const photosPerPage = 30;
@@ -76,14 +77,17 @@
     const count = checks.filter(check => check.checked).length;
     selectedLabel.textContent = `${count} selected`;
     downloadButton.disabled = count === 0;
-    const pageChecks = checks.filter((_, index) => Math.floor(index / photosPerPage) === currentPage);
-    const pageSelected = pageChecks.filter(check => check.checked).length;
-    selectAll.checked = pageChecks.length > 0 && pageSelected === pageChecks.length;
-    selectAll.indeterminate = pageSelected > 0 && pageSelected < pageChecks.length;
+    selectAll.checked = checks.length > 0 && count === checks.length;
+    selectAll.indeterminate = count > 0 && count < checks.length;
+    allPhotos.disabled = !selectAll.checked;
+    checks.forEach(check => {
+      if (selectAll.checked) check.removeAttribute('name');
+      else check.name = 'files[]';
+    });
     links.forEach((link,index) => link.closest('.shot').classList.toggle('is-selected',checks[index].checked));
   }
   checks.forEach(check => check.addEventListener('change',updateSelection));
-  selectAll.addEventListener('change',() => {checks.forEach((check,index) => {if(Math.floor(index/photosPerPage)===currentPage)check.checked=selectAll.checked;});updateSelection();});
+  selectAll.addEventListener('change',() => { checks.forEach(check => { check.checked = selectAll.checked; }); updateSelection(); });
   pagePrevious.addEventListener('click', () => renderPage(currentPage - 1));
   pageNext.addEventListener('click', () => renderPage(currentPage + 1));
   renderPage(0);

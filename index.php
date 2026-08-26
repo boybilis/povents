@@ -34,7 +34,7 @@ ob_start(static function (string $html): string {
     }
     return str_replace(
         ['</head>','</body>'],
-        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=10"></head>','<script src="assets/gallery.js?v=6"></script></body>'],
+        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=10"></head>','<script src="assets/gallery.js?v=7"></script></body>'],
         $html
     );
 });
@@ -112,12 +112,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'download_zip') {
         $u=require_user(); $event=event_for_owner((int)($_POST['event_id']??0),(int)$u['id']);
         if (!$event) { http_response_code(404); exit('Event not found.'); }
+        $allPhotos = ($_POST['all_photos'] ?? '') === '1';
         $requested=array_values(array_unique(array_filter(array_map('basename',$_POST['files']??[]))));
-        if (!$requested) { flash('error','Select at least one photo to download.'); go('?page=event&id='.$event['id']); }
+        if (!$allPhotos && !$requested) { flash('error','Select at least one photo to download.'); go('?page=event&id='.$event['id']); }
         if (!class_exists('ZipArchive')) { flash('error','ZIP downloads are not enabled on this server.'); go('?page=event&id='.$event['id']); }
-        $placeholders=implode(',',array_fill(0,count($requested),'?'));
-        $s=db()->prepare("SELECT file_name FROM photos WHERE event_id=? AND expires_at>NOW() AND file_name IN ($placeholders)");
-        $s->execute(array_merge([$event['id']],$requested)); $files=$s->fetchAll(PDO::FETCH_COLUMN);
+        if ($allPhotos) {
+            $s=db()->prepare('SELECT file_name FROM photos WHERE event_id=? AND expires_at>NOW() ORDER BY created_at ASC');
+            $s->execute([$event['id']]);
+        } else {
+            $placeholders=implode(',',array_fill(0,count($requested),'?'));
+            $s=db()->prepare("SELECT file_name FROM photos WHERE event_id=? AND expires_at>NOW() AND file_name IN ($placeholders)");
+            $s->execute(array_merge([$event['id']],$requested));
+        }
+        $files=$s->fetchAll(PDO::FETCH_COLUMN);
         if (!$files) { flash('error','The selected photos are no longer available.'); go('?page=event&id='.$event['id']); }
         $zipPath=tempnam(sys_get_temp_dir(),'povents-'); $zip=new ZipArchive();
         if ($zip->open($zipPath,ZipArchive::CREATE|ZipArchive::OVERWRITE)!==true) { @unlink($zipPath); http_response_code(500); exit('Could not create ZIP file.'); }
