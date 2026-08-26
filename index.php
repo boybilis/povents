@@ -4,6 +4,7 @@ session_start();
 require __DIR__ . '/lib.php';
 ob_start(static function (string $html): string {
     $html = str_replace('<i></i>POVents', '<img src="assets/povents-logo.png" alt="POVents">', $html);
+    $html = str_replace('<span class="brand"><img src="assets/povents-logo.png" alt="POVents"></span>', '<span class="brand"><img src="assets/povents-logo-dark.png" alt="POVents"></span>', $html);
     $html = str_replace('<footer class="shell section muted">POVents', '<footer class="shell section muted"><img class="footer-logo" src="assets/povents-logo.png" alt="POVents">', $html);
     $html = str_replace('<section class="card" style="text-align:center;color:#17231f"><div class="eyebrow">', '<section class="card" style="text-align:center;color:#17231f"><img class="message-logo" src="assets/povents-logo.png" alt="POVents"><div class="eyebrow">', $html);
     return str_replace(
