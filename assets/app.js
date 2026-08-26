@@ -23,7 +23,7 @@
   watermarkPreview.className = 'watermark-preview';
   watermarkPreview.hidden = true;
   const watermarkPreviewLogo = new Image();
-  watermarkPreviewLogo.src = 'assets/povents-logo.png';
+  watermarkPreviewLogo.src = 'assets/povents-logo.png?v=4';
   watermarkPreviewLogo.alt = 'POVents';
   const watermarkPreviewCaption = document.createElement('span');
   watermarkPreview.append(watermarkPreviewLogo, watermarkPreviewCaption);
@@ -47,7 +47,7 @@
   let previewTimer = null;
   let cameraRequestId = 0;
   const watermarkLogo = new Image();
-  watermarkLogo.src = 'assets/povents-logo.png';
+  watermarkLogo.src = 'assets/povents-logo.png?v=4';
   const watermarkLogoReady = new Promise((resolve, reject) => {
     watermarkLogo.onload = resolve;
     watermarkLogo.onerror = reject;
@@ -327,7 +327,7 @@
     consent.setAttribute('aria-modal', 'true');
     consent.setAttribute('aria-labelledby', 'guest-consent-title');
     consent.innerHTML = `<div class="guest-consent__panel">
-      <header class="guest-consent__head"><img src="assets/povents-logo.png" alt="POVents"><h1 id="guest-consent-title">Before you take photos</h1><p>Guest terms and privacy notice for <strong data-event-name></strong></p></header>
+      <header class="guest-consent__head"><img src="assets/povents-logo.png?v=4" alt="POVents"><h1 id="guest-consent-title">Before you take photos</h1><p>Guest terms and privacy notice for <strong data-event-name></strong></p></header>
       <div class="guest-consent__terms" tabindex="0">
         <h2>End User License Agreement and photo ownership</h2>
         <p>By using this camera and approving an upload, you confirm that you are allowed to take and share the photo and that it does not contain unlawful, abusive, or intentionally harmful content.</p>
