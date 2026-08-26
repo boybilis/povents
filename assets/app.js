@@ -316,6 +316,52 @@
     stream = null;
     video.srcObject = null;
   });
-  window.addEventListener('pageshow', event => { if (event.persisted && remaining > 0) start(); });
-  start();
+  window.addEventListener('pageshow', event => { if (event.persisted && remaining > 0) startAfterConsent(); });
+  function startAfterConsent() {
+    const consentKey = `povents-guest-terms-v1-${token}`;
+    try { if (sessionStorage.getItem(consentKey) === 'accepted') { start(); return; } } catch (_) {}
+    const eventTitle = document.querySelector('.camera-top > span:last-child')?.textContent?.trim() || 'this event';
+    const consent = document.createElement('section');
+    consent.className = 'guest-consent';
+    consent.setAttribute('role', 'dialog');
+    consent.setAttribute('aria-modal', 'true');
+    consent.setAttribute('aria-labelledby', 'guest-consent-title');
+    consent.innerHTML = `<div class="guest-consent__panel">
+      <header class="guest-consent__head"><img src="assets/povents-logo.png" alt="POVents"><h1 id="guest-consent-title">Before you take photos</h1><p>Guest terms and privacy notice for <strong data-event-name></strong></p></header>
+      <div class="guest-consent__terms" tabindex="0">
+        <h2>End User License Agreement and photo ownership</h2>
+        <p>By using this camera and approving an upload, you confirm that you are allowed to take and share the photo and that it does not contain unlawful, abusive, or intentionally harmful content.</p>
+        <p><strong>Uploaded photos become the property of the event organizer.</strong> You transfer to the organizer the ownership rights you hold in each approved photo. Where a transfer is not legally permitted, you grant the organizer a worldwide, perpetual, royalty-free license to keep, view, download, reproduce, display, and privately share it for personal and event-related purposes.</p>
+        <p>The organizer may use uploaded photos for their own viewing, event memories, private galleries, and personal sharing. <strong>The organizer may not sell the photos, license them for payment, use them in paid advertising, or otherwise commercially resell them.</strong></p>
+        <p>You remain responsible for respecting the privacy, dignity, and rights of people shown in your photos. Do not upload a photo if you do not agree to these terms.</p>
+        <h2>Privacy Policy</h2>
+        <ul>
+          <li><strong>Information processed:</strong> approved photos, optional captions, capture time, and limited session information needed to enforce the five-photo limit and secure uploads.</li>
+          <li><strong>Purpose:</strong> to deliver photos to the organizer’s private event gallery, ZIP download, offline album, and any organizer-created shareable album link.</li>
+          <li><strong>Who controls the photos:</strong> the event organizer controls their event collection; POVents provides the upload and temporary storage service.</li>
+          <li><strong>Storage:</strong> POVents permanently deletes hosted photos seven days after the event. An organizer or recipient may download and retain copies beyond that period, which POVents cannot delete or control.</li>
+          <li><strong>Sharing risk:</strong> anyone who receives a shareable album link may download the album until that link expires. The organizer is responsible for sharing it carefully.</li>
+          <li><strong>Your choices and rights:</strong> you may leave without uploading. To request access, correction, deletion, object to processing, or withdraw consent for an uploaded photo, contact the event organizer who shared this QR code or the administrator of this POVents site. Some requests may be subject to legal limitations and copies already downloaded by others.</li>
+        </ul>
+        <p>This notice is intended to explain the collection clearly and does not waive rights provided by applicable privacy law.</p>
+      </div>
+      <footer class="guest-consent__actions"><label class="guest-consent__check"><input type="checkbox" data-consent-check><span>I have read and accept the End User License Agreement and Privacy Policy, including the transfer of uploaded-photo ownership to the event organizer and the prohibition on selling the photos.</span></label><div class="guest-consent__buttons"><button type="button" class="guest-consent__leave" data-consent-leave>Leave event</button><button type="button" data-consent-accept disabled>Accept and open camera</button></div></footer>
+    </div>`;
+    consent.querySelector('[data-event-name]').textContent = eventTitle;
+    const check = consent.querySelector('[data-consent-check]');
+    const accept = consent.querySelector('[data-consent-accept]');
+    check.addEventListener('change', () => { accept.disabled = !check.checked; });
+    accept.addEventListener('click', () => {
+      if (!check.checked) return;
+      try { sessionStorage.setItem(consentKey, 'accepted'); } catch (_) {}
+      consent.remove(); document.body.style.overflow = ''; start();
+    });
+    consent.querySelector('[data-consent-leave]').addEventListener('click', () => {
+      if (history.length > 1) history.back(); else location.replace('about:blank');
+    });
+    document.body.style.overflow = 'hidden';
+    document.body.appendChild(consent);
+    consent.querySelector('.guest-consent__terms').focus();
+  }
+  startAfterConsent();
 })();

@@ -44,6 +44,12 @@ button,.button,input{min-height:44px}
 .message-logo{display:block;width:min(220px,65%);height:auto;margin:0 auto 28px}
 .footer-logo{display:inline-block;width:120px;height:auto;vertical-align:middle;margin-right:12px}
 .event-downloads{display:flex;flex-wrap:wrap;gap:8px}
+.guest-consent{position:fixed;z-index:2000;inset:0;display:grid;place-items:center;padding:18px;background:#03100cdb;backdrop-filter:blur(12px);color:#17231f}
+.guest-consent__panel{width:min(720px,100%);max-height:min(90vh,850px);display:flex;flex-direction:column;background:#fffdf8;border:1px solid #d9ddd4;border-radius:24px;box-shadow:0 28px 100px #000a;overflow:hidden}
+.guest-consent__head{padding:22px 24px 15px;border-bottom:1px solid #e1e3dc}.guest-consent__head img{display:block;width:150px;height:auto;margin-bottom:14px}.guest-consent__head h1{font-family:Georgia,serif;font-size:34px;letter-spacing:-1px;margin:0 0 6px}.guest-consent__head p{margin:0;color:#64716b}
+.guest-consent__terms{padding:18px 24px;overflow:auto;line-height:1.55;font-size:14px}.guest-consent__terms h2{font-size:17px;margin:20px 0 7px}.guest-consent__terms h2:first-child{margin-top:0}.guest-consent__terms p,.guest-consent__terms li{color:#46534d}.guest-consent__terms ul{padding-left:21px}.guest-consent__terms strong{color:#17231f}
+.guest-consent__actions{padding:15px 24px 20px;border-top:1px solid #e1e3dc;background:#f7f4ed}.guest-consent__check{display:flex;align-items:flex-start;gap:10px;font-size:14px;font-weight:700;line-height:1.4;margin-bottom:13px}.guest-consent__check input{width:20px;height:20px;min-height:0;flex:0 0 auto;accent-color:#245b45}.guest-consent__buttons{display:grid;grid-template-columns:auto 1fr;gap:10px}.guest-consent__leave{background:#fff;color:#17231f;border:1px solid #d9ddd4}
+@media(max-width:600px){.guest-consent{padding:8px}.guest-consent__panel{max-height:96vh;border-radius:18px}.guest-consent__head{padding:16px 17px 12px}.guest-consent__head img{width:120px;margin-bottom:9px}.guest-consent__head h1{font-size:27px}.guest-consent__terms{padding:14px 17px;font-size:13px}.guest-consent__actions{padding:12px 17px 15px}.guest-consent__buttons{grid-template-columns:1fr}.guest-consent__buttons button{width:100%}}
 
 @media (max-width:760px){
   .shell{width:calc(100% - 24px)}

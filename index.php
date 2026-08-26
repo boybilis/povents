@@ -7,13 +7,14 @@ ob_start(static function (string $html): string {
     $html = str_replace('<span class="brand"><img src="assets/povents-logo.png" alt="POVents"></span>', '<span class="brand"><img src="assets/povents-logo-dark.png" alt="POVents"></span>', $html);
     $html = str_replace('<footer class="shell section muted">POVents', '<footer class="shell section muted"><img class="footer-logo" src="assets/povents-logo.png" alt="POVents">', $html);
     $html = str_replace('<section class="card" style="text-align:center;color:#17231f"><div class="eyebrow">', '<section class="card" style="text-align:center;color:#17231f"><img class="message-logo" src="assets/povents-logo.png" alt="POVents"><div class="eyebrow">', $html);
+    $html = str_replace('assets/app.js?v=5', 'assets/app.js?v=6', $html);
     if (str_contains($html, 'id="guest-link"') && isset($_GET['id'])) {
         $downloadButton = '<p class="event-downloads"><a class="button light" href="?action=download_event_qr&amp;event_id='.(int)$_GET['id'].'">Download branded QR image</a></p>';
         $html = preg_replace('~(<div class="copyline">.*?</div>)~s', '$1'.$downloadButton, $html, 1) ?? $html;
     }
     return str_replace(
         ['</head>','</body>'],
-        ['<link rel="icon" href="assets/povents-logo.png"><link rel="stylesheet" href="assets/responsive.css?v=8"></head>','<script src="assets/gallery.js?v=4"></script></body>'],
+        ['<link rel="icon" href="assets/povents-logo.png"><link rel="stylesheet" href="assets/responsive.css?v=9"></head>','<script src="assets/gallery.js?v=4"></script></body>'],
         $html
     );
 });
