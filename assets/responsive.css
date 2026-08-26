@@ -19,6 +19,9 @@ button,.button,input{min-height:44px}
 .photo-select input{position:absolute;opacity:0;pointer-events:none}
 .photo-select span{color:#245b45;font-weight:900;opacity:0}
 .shot.is-selected .photo-select{background:#dff25f}.shot.is-selected .photo-select span{opacity:1}
+.photo-delete{position:absolute;z-index:3;top:8px;right:8px;margin:0}
+.photo-delete button{width:32px;height:32px;min-width:32px;min-height:32px;padding:0;border:2px solid #fff;border-radius:999px;background:#a53838;color:#fff;font-size:23px;line-height:1;box-shadow:0 3px 12px #0005}
+.photo-delete button:hover{background:#7f2020}
 .photo-modal{position:fixed;inset:0;z-index:1000;display:grid;grid-template-columns:72px minmax(0,1fr) 72px;align-items:center;background:rgba(4,9,7,.95);padding:24px;color:#fff}
 .photo-modal[hidden]{display:none}
 .photo-modal__stage{height:calc(100vh - 48px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-width:0}

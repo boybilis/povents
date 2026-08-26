@@ -58,6 +58,15 @@
     label.className = 'photo-select';
     label.innerHTML = `<input type="checkbox" name="files[]" value="${fileName}"><span aria-hidden="true">✓</span>`;
     link.closest('.shot').appendChild(label);
+    const deleteForm = document.createElement('form');
+    deleteForm.className = 'photo-delete';
+    deleteForm.method = 'post';
+    deleteForm.action = '?action=delete_photo';
+    deleteForm.innerHTML = `<input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="event_id" value="${eventId || ''}"><input type="hidden" name="file_name" value="${fileName}"><button type="submit" aria-label="Permanently delete this photo" title="Delete photo">×</button>`;
+    deleteForm.addEventListener('submit', event => {
+      if (!confirm('Permanently delete this photo? It will be erased from the server and cannot be recovered.')) event.preventDefault();
+    });
+    link.closest('.shot').appendChild(deleteForm);
     const check = label.querySelector('input');
     check.setAttribute('form',toolbar.id);
     return check;

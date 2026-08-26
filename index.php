@@ -34,7 +34,7 @@ ob_start(static function (string $html): string {
     }
     return str_replace(
         ['</head>','</body>'],
-        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=10"></head>','<script src="assets/gallery.js?v=7"></script></body>'],
+        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=11"></head>','<script src="assets/gallery.js?v=8"></script></body>'],
         $html
     );
 });
@@ -109,6 +109,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     check_csrf();
+    if ($action === 'delete_photo') {
+        $u=require_user(); $event=event_for_owner((int)($_POST['event_id']??0),(int)$u['id']);
+        if (!$event) { http_response_code(404); exit('Event not found.'); }
+        $fileName=basename((string)($_POST['file_name']??''));
+        db()->beginTransaction();
+        try {
+            $s=db()->prepare('SELECT id,file_name FROM photos WHERE event_id=? AND file_name=? FOR UPDATE');
+            $s->execute([$event['id'],$fileName]); $photo=$s->fetch();
+            if (!$photo) throw new RuntimeException('That photo is no longer available.');
+            $savedAlbum=album_storage_path((int)$event['id']);
+            if (is_file($savedAlbum) && !unlink($savedAlbum)) throw new RuntimeException('The saved album could not be invalidated. Please try again.');
+            $path=__DIR__.'/uploads/'.$event['id'].'/'.basename($photo['file_name']);
+            if (is_file($path) && !unlink($path)) throw new RuntimeException('The photo file could not be erased from the server.');
+            db()->prepare('DELETE FROM photos WHERE id=?')->execute([$photo['id']]);
+            db()->commit();
+            flash('success','The photo was permanently deleted. Download the photo album again to create an updated saved copy.');
+        } catch (Throwable $e) {
+            if (db()->inTransaction()) db()->rollBack();
+            flash('error',$e->getMessage());
+        }
+        go('?page=event&id='.$event['id']);
+    }
     if ($action === 'download_zip') {
         $u=require_user(); $event=event_for_owner((int)($_POST['event_id']??0),(int)$u['id']);
         if (!$event) { http_response_code(404); exit('Event not found.'); }
