@@ -1,4 +1,23 @@
 (() => {
+  function bindAlbumShare(button, eventId) {
+    if (!button || button.dataset.shareReady) return;
+    button.dataset.shareReady = '1';
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      try {
+        const response = await fetch(`?action=shared_album_link&event_id=${encodeURIComponent(eventId || '')}`, {headers: {'Accept': 'application/json'}});
+        const data = await response.json();
+        if (!response.ok || !data.url) throw new Error(data.error || 'Could not create the share link.');
+        await navigator.clipboard.writeText(data.url);
+        button.textContent = 'Album link copied!';
+        setTimeout(() => { button.textContent = 'Copy shareable album link'; }, 2500);
+      } catch (error) {
+        button.textContent = error.message || 'Copy failed';
+      } finally { button.disabled = false; }
+    });
+  }
+
+  document.querySelectorAll('.album-share[data-event-id]').forEach(button => bindAlbumShare(button, button.dataset.eventId));
   const links = [...document.querySelectorAll('.gallery .shot a')];
   if (!links.length) return;
 
@@ -30,19 +49,7 @@
   const pageNext = pagination.querySelector('[data-page-next]');
   const pageStatus = pagination.querySelector('[data-page-status]');
   const shareButton = toolbar.querySelector('.album-share');
-  shareButton.addEventListener('click', async () => {
-    shareButton.disabled = true;
-    try {
-      const response = await fetch(`?action=shared_album_link&event_id=${encodeURIComponent(eventId || '')}`, {headers: {'Accept': 'application/json'}});
-      const data = await response.json();
-      if (!response.ok || !data.url) throw new Error(data.error || 'Could not create the share link.');
-      await navigator.clipboard.writeText(data.url);
-      shareButton.textContent = 'Album link copied!';
-      setTimeout(() => { shareButton.textContent = 'Copy shareable album link'; }, 2500);
-    } catch (error) {
-      shareButton.textContent = error.message || 'Copy failed';
-    } finally { shareButton.disabled = false; }
-  });
+  bindAlbumShare(shareButton, eventId);
 
   const checks = links.map(link => {
     const fileName = decodeURIComponent(new URL(link.href).pathname.split('/').pop());

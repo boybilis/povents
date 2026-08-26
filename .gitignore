@@ -5,6 +5,10 @@ config.php
 uploads/*
 !uploads/.htaccess
 
+# Generated offline albums remain on the web server, not in source control
+albums/*
+!albums/.htaccess
+
 # Local/editor files
 .DS_Store
 Thumbs.db

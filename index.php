@@ -20,12 +20,17 @@ ob_start(static function (string $html): string {
     $html = str_replace(['Your Creator plan activates automatically','Check my plan'], ['Your event pass is added automatically','Check my event passes'], $html);
     $html = str_replace(['assets/app.js?v=5','assets/app.js?v=6'], 'assets/app.js?v=7', $html);
     if (str_contains($html, 'id="guest-link"') && isset($_GET['id'])) {
-        $downloadButton = '<p class="event-downloads"><a class="button light" href="?action=download_event_qr&amp;event_id='.(int)$_GET['id'].'">Download branded QR image</a></p>';
+        $eventId = (int)$_GET['id'];
+        $downloadButton = '<p class="event-downloads"><a class="button light" href="?action=download_event_qr&amp;event_id='.$eventId.'">Download branded QR image</a></p>';
         $html = preg_replace('~(<div class="copyline">.*?</div>)~s', '$1'.$downloadButton, $html, 1) ?? $html;
+        if (is_file(album_storage_path($eventId)) && !str_contains($html, 'class="gallery"')) {
+            $archivedAlbum = '<section class="card archived-album"><div><div class="eyebrow">Saved event album</div><h2>Photo album archive</h2><p class="muted">The original event photos have expired. Your last generated offline album remains available.</p></div><div class="actions"><a class="button" href="?action=download_photo_album&amp;event_id='.$eventId.'">Download photo album</a><button class="button light album-share" type="button" data-event-id="'.$eventId.'">Copy shareable album link</button></div></section>';
+            $html = preg_replace('~<div class="empty">No photos yet\..*?</div>~s', $archivedAlbum, $html, 1) ?? $html;
+        }
     }
     return str_replace(
         ['</head>','</body>'],
-        ['<link rel="icon" href="assets/povents-logo.png"><link rel="stylesheet" href="assets/responsive.css?v=10"></head>','<script src="assets/gallery.js?v=5"></script></body>'],
+        ['<link rel="icon" href="assets/povents-logo.png"><link rel="stylesheet" href="assets/responsive.css?v=10"></head>','<script src="assets/gallery.js?v=6"></script></body>'],
         $html
     );
 });
@@ -55,7 +60,8 @@ if ($action === 'shared_album_link') {
 if ($action === 'download_shared_album') {
     $eventId = (int)($_GET['event_id'] ?? 0); $expires = (int)($_GET['expires'] ?? 0); $signature = (string)($_GET['signature'] ?? '');
     $s = db()->prepare('SELECT * FROM events WHERE id=? AND is_active=1'); $s->execute([$eventId]); $event = $s->fetch();
-    if (!$event || $expires < time() || !hash_equals(shared_album_signature($event, $expires), $signature)) { http_response_code(410); exit('This shared photo album link is invalid or has expired.'); }
+    $savedAlbum = $event ? album_storage_path((int)$event['id']) : '';
+    if (!$event || !hash_equals(shared_album_signature($event, $expires), $signature) || ($expires < time() && !is_file($savedAlbum))) { http_response_code(410); exit('This shared photo album link is invalid or has expired.'); }
     download_photo_album($event, true);
 }
 
