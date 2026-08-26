@@ -63,6 +63,15 @@ function event_for_owner(int $id, int $userId): ?array {
     $s = db()->prepare('SELECT * FROM events WHERE id=? AND user_id=?'); $s->execute([$id, $userId]);
     return $s->fetch() ?: null;
 }
+function event_for_owner_token(string $token, int $userId): ?array {
+    $token = preg_replace('/[^a-f0-9]/', '', strtolower($token));
+    if (strlen($token) !== 32) return null;
+    $s = db()->prepare('SELECT * FROM events WHERE token=? AND user_id=?'); $s->execute([$token, $userId]);
+    return $s->fetch() ?: null;
+}
+function organizer_event_url(array $event, bool $edit = false): string {
+    return '?page='.($edit ? 'edit-event' : 'event').'&token='.rawurlencode((string)$event['token']);
+}
 
 function send_registration_otp(string $name, string $email, string $otp): void {
     $autoload = __DIR__.'/vendor/autoload.php';
@@ -221,7 +230,7 @@ function download_photo_album(array $event, bool $shared = false, ?string $cover
         $savedAlbum = album_storage_path((int)$event['id']);
         if (is_file($savedAlbum)) serve_saved_photo_album($event, $savedAlbum);
         if ($shared) { http_response_code(404); exit('This photo album does not have any available photos.'); }
-        flash('error', 'No saved photo album is available for this event.'); go('?page=event&id='.$event['id']);
+        flash('error', 'No saved photo album is available for this event.'); go(organizer_event_url($event));
     }
     if (!extension_loaded('gd')) { http_response_code(500); exit('Photo album compression is not enabled on this server. Enable the PHP GD extension and try again.'); }
     $byOrientation = ['portrait'=>[], 'landscape'=>[]];

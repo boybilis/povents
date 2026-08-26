@@ -21,7 +21,7 @@
   let links = [...document.querySelectorAll('.gallery .shot a')];
   if (!links.length) return;
 
-  const eventId = new URLSearchParams(location.search).get('id');
+  const eventId = document.querySelector('.presentation-qr-create')?.dataset.eventId || '';
   const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
   const toolbar = document.createElement('form');
   toolbar.className = 'gallery-toolbar';

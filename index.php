@@ -18,14 +18,15 @@ ob_start(static function (string $html): string {
         $html = preg_replace('~<span>Event passes</span><strong>.*?</strong>~', '<span>Admin access</span><strong>Unlimited</strong>', $html, 1) ?? $html;
     }
     $html = str_replace(['Your Creator plan activates automatically','Check my plan'], ['Your event pass is added automatically','Check my event passes'], $html);
-    if (isset($_GET['id'])) {
+    if (isset($_GET['token'])) {
         $albumNotice = '<strong>Save your photo album:</strong> The earliest photos expire $1 and will be permanently erased. Create the photo album at least once before this deadline so a saved album remains available after the original images are deleted. <a class="album-notice-create" href="#gallery-download"><strong>Create Photo Album now</strong></a>';
         $html = preg_replace('~<strong>7-day storage:</strong> The earliest photos expire (.*?)\. Download originals before they are permanently erased\.~', $albumNotice, $html, 1) ?? $html;
     }
     $html = str_replace(['assets/app.js?v=4','assets/app.js?v=5','assets/app.js?v=6','assets/app.js?v=7'], 'assets/app.js?v=8', $html);
     $html = str_replace(['assets/style.css"','assets/style.css?v=4"'], 'assets/style.css?v=5"', $html);
-    if (str_contains($html, 'id="guest-link"') && isset($_GET['id'])) {
-        $eventId = (int)$_GET['id'];
+    if (str_contains($html, 'id="guest-link"') && isset($_GET['token']) && ($currentUser = user())) {
+        $currentEvent = event_for_owner_token((string)$_GET['token'], (int)$currentUser['id']);
+        $eventId = (int)($currentEvent['id'] ?? 0);
         $downloadButton = '<p class="event-downloads"><button class="button light presentation-qr-create" type="button" data-event-id="'.$eventId.'">Create Presentation QR</button></p>';
         $html = preg_replace('~(<div class="copyline">.*?</div>)~s', '$1'.$downloadButton, $html, 1) ?? $html;
         if (is_file(album_storage_path($eventId)) && !str_contains($html, 'class="gallery"')) {
@@ -35,7 +36,7 @@ ob_start(static function (string $html): string {
     }
     return str_replace(
         ['</head>','</body>'],
-        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=15"><link rel="stylesheet" href="assets/hero.css?v=1"></head>','<script src="assets/gallery.js?v=11"></script><script src="assets/presentation-qr.js?v=1"></script></body>'],
+        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=15"><link rel="stylesheet" href="assets/hero.css?v=1"></head>','<script src="assets/gallery.js?v=12"></script><script src="assets/presentation-qr.js?v=1"></script></body>'],
         $html
     );
 });
@@ -147,15 +148,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if($wantsJson){header('Content-Type: application/json');http_response_code(400);echo json_encode(['error'=>$e->getMessage()]);exit;}
             flash('error',$e->getMessage());
         }
-        go('?page=event&id='.$event['id']);
+        go(organizer_event_url($event));
     }
     if ($action === 'download_zip') {
         $u=require_user(); $event=event_for_owner((int)($_POST['event_id']??0),(int)$u['id']);
         if (!$event) { http_response_code(404); exit('Event not found.'); }
         $allPhotos = ($_POST['all_photos'] ?? '') === '1';
         $requested=array_values(array_unique(array_filter(array_map('basename',$_POST['files']??[]))));
-        if (!$allPhotos && !$requested) { flash('error','Select at least one photo to download.'); go('?page=event&id='.$event['id']); }
-        if (!class_exists('ZipArchive')) { flash('error','ZIP downloads are not enabled on this server.'); go('?page=event&id='.$event['id']); }
+        if (!$allPhotos && !$requested) { flash('error','Select at least one photo to download.'); go(organizer_event_url($event)); }
+        if (!class_exists('ZipArchive')) { flash('error','ZIP downloads are not enabled on this server.'); go(organizer_event_url($event)); }
         if ($allPhotos) {
             $s=db()->prepare('SELECT file_name FROM photos WHERE event_id=? AND expires_at>NOW() ORDER BY created_at ASC');
             $s->execute([$event['id']]);
@@ -165,7 +166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $s->execute(array_merge([$event['id']],$requested));
         }
         $files=$s->fetchAll(PDO::FETCH_COLUMN);
-        if (!$files) { flash('error','The selected photos are no longer available.'); go('?page=event&id='.$event['id']); }
+        if (!$files) { flash('error','The selected photos are no longer available.'); go(organizer_event_url($event)); }
         $zipPath=tempnam(sys_get_temp_dir(),'povents-'); $zip=new ZipArchive();
         if ($zip->open($zipPath,ZipArchive::CREATE|ZipArchive::OVERWRITE)!==true) { @unlink($zipPath); http_response_code(500); exit('Could not create ZIP file.'); }
         foreach($files as $file){$path=__DIR__.'/uploads/'.$event['id'].'/'.basename($file);if(is_file($path))$zip->addFile($path,basename($file));}
@@ -309,24 +310,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $credit->execute([$u['id']]);
             if ($credit->fetchColumn() === false) { db()->rollBack(); go('?page=subscribe'); }
         }
+        $eventToken=bin2hex(random_bytes(16));
         $s=db()->prepare('INSERT INTO events(user_id,title,event_date,start_time,end_time,location,token) VALUES(?,?,?,?,?,?,?)');
-        $s->execute([$u['id'],$title,$eventDate,$startTime.':00',$endTime.':00',trim($_POST['location'] ?? ''),bin2hex(random_bytes(16))]);
+        $s->execute([$u['id'],$title,$eventDate,$startTime.':00',$endTime.':00',trim($_POST['location'] ?? ''),$eventToken]);
         $eventId=(int)db()->lastInsertId();
         if (!is_admin($u)) db()->prepare("UPDATE users SET subscription_status=IF(event_credits=1,'inactive','active'),event_credits=event_credits-1 WHERE id=?")->execute([$u['id']]);
         db()->commit(); refresh_user((int)$u['id']);
-        go('?page=event&id='.$eventId);
+        go('?page=event&token='.rawurlencode($eventToken));
     }
     if ($action === 'update_event') {
         $u=require_user(); $event=event_for_owner((int)($_POST['event_id']??0),(int)$u['id']);
         if (!$event) { http_response_code(404); exit('Event not found.'); }
-        if (event_day_status($event) !== 'upcoming') { flash('error','Event details can no longer be edited because the event has started.'); go('?page=event&id='.$event['id']); }
+        if (event_day_status($event) !== 'upcoming') { flash('error','Event details can no longer be edited because the event has started.'); go(organizer_event_url($event)); }
         $title=trim($_POST['title']??''); $eventDate=$_POST['event_date']??''; $startTime=$_POST['start_time']??''; $endTime=$_POST['end_time']??'';
         $parsedDate=DateTimeImmutable::createFromFormat('!Y-m-d',$eventDate); $startParsed=DateTimeImmutable::createFromFormat('!H:i',$startTime); $endParsed=DateTimeImmutable::createFromFormat('!H:i',$endTime);
-        if (strlen($title)<3 || !$parsedDate || $parsedDate->format('Y-m-d')!==$eventDate || !$startParsed || !$endParsed || $startParsed->format('H:i')!==$startTime || $endParsed->format('H:i')!==$endTime || $endTime<=$startTime) { flash('error','Enter valid event details and make sure the end time is later than the start time.'); go('?page=edit-event&id='.$event['id']); }
+        if (strlen($title)<3 || !$parsedDate || $parsedDate->format('Y-m-d')!==$eventDate || !$startParsed || !$endParsed || $startParsed->format('H:i')!==$startTime || $endParsed->format('H:i')!==$endTime || $endTime<=$startTime) { flash('error','Enter valid event details and make sure the end time is later than the start time.'); go(organizer_event_url($event,true)); }
         $newStart=new DateTimeImmutable($eventDate.' '.$startTime.':00');
-        if ($newStart<=new DateTimeImmutable('now')) { flash('error','The updated event start must still be in the future.'); go('?page=edit-event&id='.$event['id']); }
+        if ($newStart<=new DateTimeImmutable('now')) { flash('error','The updated event start must still be in the future.'); go(organizer_event_url($event,true)); }
         db()->prepare('UPDATE events SET title=?,event_date=?,start_time=?,end_time=?,location=? WHERE id=? AND user_id=?')->execute([$title,$eventDate,$startTime.':00',$endTime.':00',trim($_POST['location']??''),$event['id'],$u['id']]);
-        flash('success','Event details updated.'); go('?page=event&id='.$event['id']);
+        flash('success','Event details updated.'); go(organizer_event_url($event));
     }
 }
 
@@ -402,13 +404,13 @@ if ($page === 'home'): ?>
 <?php elseif ($page === 'payment-return'): $u=require_user(); refresh_user((int)$u['id']); ?>
 <main class="shell auth-wrap"><section class="card auth"><div class="eyebrow">Payment received</div><h1>We’re confirming it.</h1><p class="lead">PayMongo will confirm your payment securely. Your Creator plan activates automatically, usually within a few seconds.</p><a class="button full" href="?page=dashboard">Check my plan</a></section></main>
 <?php elseif ($page === 'dashboard'): $u=require_user(); $s=db()->prepare('SELECT e.*,COUNT(p.id) photos FROM events e LEFT JOIN photos p ON p.event_id=e.id WHERE e.user_id=? GROUP BY e.id ORDER BY e.created_at DESC');$s->execute([$u['id']]);$events=$s->fetchAll();$photos=array_sum(array_column($events,'photos')); ?>
-<main class="shell"><div class="dash-head"><div><div class="eyebrow">Organizer studio</div><h1>Hello, <?=e(explode(' ',$u['name'])[0])?>.</h1></div><a class="button" href="<?=active_subscription($u)?'?page=new-event':'?page=subscribe'?>"><?=active_subscription($u)?'+ New event':'Buy event pass'?></a></div><section class="stats"><div class="stat"><span>Events</span><strong><?=count($events)?></strong></div><div class="stat"><span>Photos collected</span><strong><?=$photos?></strong></div><div class="stat"><span>Event passes</span><strong><?=(int)($u['event_credits']??0)?></strong></div></section><?php if(!$events): ?><div class="empty"><h3>Your first story starts here.</h3><p>Use one event pass to create an event and receive its guest QR code.</p><a class="button" href="<?=active_subscription($u)?'?page=new-event':'?page=subscribe'?>"><?=active_subscription($u)?'Create event':'Buy event pass'?></a></div><?php else: ?><div class="event-list"><?php foreach($events as $event): ?><a class="event-row" href="?page=event&id=<?=$event['id']?>"><div><h3><?=e($event['title'])?></h3><span class="muted"><?=e($event['event_date'] ?: 'Date not set')?> · <?=e($event['location'] ?: 'Location not set')?></span></div><strong><?=$event['photos']?> photos →</strong></a><?php endforeach; ?></div><?php endif; ?></main>
+<main class="shell"><div class="dash-head"><div><div class="eyebrow">Organizer studio</div><h1>Hello, <?=e(explode(' ',$u['name'])[0])?>.</h1></div><a class="button" href="<?=active_subscription($u)?'?page=new-event':'?page=subscribe'?>"><?=active_subscription($u)?'+ New event':'Buy event pass'?></a></div><section class="stats"><div class="stat"><span>Events</span><strong><?=count($events)?></strong></div><div class="stat"><span>Photos collected</span><strong><?=$photos?></strong></div><div class="stat"><span>Event passes</span><strong><?=(int)($u['event_credits']??0)?></strong></div></section><?php if(!$events): ?><div class="empty"><h3>Your first story starts here.</h3><p>Use one event pass to create an event and receive its guest QR code.</p><a class="button" href="<?=active_subscription($u)?'?page=new-event':'?page=subscribe'?>"><?=active_subscription($u)?'Create event':'Buy event pass'?></a></div><?php else: ?><div class="event-list"><?php foreach($events as $event): ?><a class="event-row" href="<?=e(organizer_event_url($event))?>"><div><h3><?=e($event['title'])?></h3><span class="muted"><?=e($event['event_date'] ?: 'Date not set')?> · <?=e($event['location'] ?: 'Location not set')?></span></div><strong><?=$event['photos']?> photos →</strong></a><?php endforeach; ?></div><?php endif; ?></main>
 <?php elseif ($page === 'new-event'): $u=require_user(); if(!active_subscription($u)) go('?page=subscribe'); ?>
 <main class="shell auth-wrap"><section class="card auth"><div class="eyebrow">New collection</div><h1>Create event</h1><form method="post" action="?action=create_event"><div class="field"><label for="title">Event name</label><input id="title" name="title" placeholder="Maya & Luis' wedding" required></div><div class="field"><label for="date">Event date</label><input id="date" name="event_date" type="date" required></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="field"><label for="start">Camera start</label><input id="start" name="start_time" type="time" required></div><div class="field"><label for="end">Camera end</label><input id="end" name="end_time" type="time" required></div></div><div class="field"><label for="location">Location</label><input id="location" name="location" placeholder="The Glass Garden"></div><input type="hidden" name="csrf" value="<?=csrf()?>"><button class="full">Create event & QR</button></form><p class="muted" style="font-size:13px">The guest camera works only during this time window. Photos are permanently deleted seven days after the event.</p></section></main>
-<?php elseif ($page === 'edit-event'): $u=require_user(); $event=event_for_owner((int)($_GET['id']??0),(int)$u['id']); if(!$event){http_response_code(404);echo '<main class="shell empty">Event not found.</main>';}elseif(event_day_status($event)!=='upcoming'){flash('error','This event can no longer be edited because it has started.');go('?page=event&id='.$event['id']);}else{ ?>
+<?php elseif ($page === 'edit-event'): $u=require_user(); $event=event_for_owner_token((string)($_GET['token']??''),(int)$u['id']); if(!$event){http_response_code(404);echo '<main class="shell empty">Event not found.</main>';}elseif(event_day_status($event)!=='upcoming'){flash('error','This event can no longer be edited because it has started.');go(organizer_event_url($event));}else{ ?>
 <main class="shell auth-wrap"><section class="card auth"><div class="eyebrow">Before the event</div><h1>Edit event</h1><form method="post" action="?action=update_event"><div class="field"><label for="title">Event name</label><input id="title" name="title" value="<?=e($event['title'])?>" required></div><div class="field"><label for="date">Event date</label><input id="date" name="event_date" type="date" value="<?=e($event['event_date'])?>" required></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="field"><label for="start">Camera start</label><input id="start" name="start_time" type="time" value="<?=e(substr($event['start_time'],0,5))?>" required></div><div class="field"><label for="end">Camera end</label><input id="end" name="end_time" type="time" value="<?=e(substr($event['end_time'],0,5))?>" required></div></div><div class="field"><label for="location">Location</label><input id="location" name="location" value="<?=e($event['location'])?>"></div><input type="hidden" name="event_id" value="<?=$event['id']?>"><input type="hidden" name="csrf" value="<?=csrf()?>"><button class="full">Save changes</button></form><p class="muted" style="font-size:13px">Editing locks automatically when the event starts.</p></section></main>
 <?php } ?>
-<?php elseif ($page === 'event'): $u=require_user();$event=event_for_owner((int)($_GET['id']??0),(int)$u['id']);if(!$event){http_response_code(404);echo '<main class="shell empty">Event not found.</main>';}else{$s=db()->prepare('SELECT * FROM photos WHERE event_id=? AND expires_at>NOW() ORDER BY created_at DESC');$s->execute([$event['id']]);$photos=$s->fetchAll();$guest=url('?page=capture&token='.$event['token']);$qr='https://api.qrserver.com/v1/create-qr-code/?size=520x520&data='.rawurlencode($guest);$soonest=$photos?min(array_map(fn($p)=>strtotime($p['expires_at']),$photos)):null; ?>
+<?php elseif ($page === 'event'): $u=require_user();$event=event_for_owner_token((string)($_GET['token']??''),(int)$u['id']);if(!$event){http_response_code(404);echo '<main class="shell empty">Event not found.</main>';}else{$s=db()->prepare('SELECT * FROM photos WHERE event_id=? AND expires_at>NOW() ORDER BY created_at DESC');$s->execute([$event['id']]);$photos=$s->fetchAll();$guest=url('?page=capture&token='.$event['token']);$qr='https://api.qrserver.com/v1/create-qr-code/?size=520x520&data='.rawurlencode($guest);$soonest=$photos?min(array_map(fn($p)=>strtotime($p['expires_at']),$photos)):null; ?>
 <main class="shell"><div class="dash-head"><div><a class="muted" href="?page=dashboard">← All events</a><h1><?=e($event['title'])?></h1><p class="muted"><?=e($event['event_date']?:'Date not set')?> · <?=e($event['location']?:'Location not set')?></p></div><strong><?=count($photos)?> photos</strong></div><section class="card qr-panel"><img src="<?=e($qr)?>" alt="Guest camera QR code"><div><div class="eyebrow">Guest camera link</div><h2>Print it. Place it. Let guests shoot.</h2><p class="muted">Each new scan opens the camera and allows up to five photo uploads.</p><div class="copyline"><input id="guest-link" readonly value="<?=e($guest)?>"><button type="button" onclick="navigator.clipboard.writeText(document.getElementById('guest-link').value);this.textContent='Copied!'">Copy</button></div><p><a href="<?=e($guest)?>" target="_blank">Preview guest camera →</a></p></div></section><?php if($soonest): ?><div class="alert" style="margin-top:18px"><strong>7-day storage:</strong> The earliest photos expire <?=date('M j, Y \a\t g:i A',$soonest)?>. Download originals before they are permanently erased.</div><?php endif; ?><section class="section"><div class="section-head"><div><div class="eyebrow">Live gallery</div><h2>Every point of view</h2></div><button class="button light" onclick="location.reload()">Refresh photos</button></div><?php if(!$photos): ?><div class="empty">No photos yet. Share the QR code and watch this gallery come alive.</div><?php else: ?><div class="gallery"><?php foreach($photos as $photo): ?><figure class="shot"><a href="uploads/<?=$event['id']?>/<?=e($photo['file_name'])?>" download><img loading="lazy" src="uploads/<?=$event['id']?>/<?=e($photo['file_name'])?>" alt="Guest photo"></a><time><?=max(1,(int)ceil((strtotime($photo['expires_at'])-time())/86400))?>d left</time></figure><?php endforeach; ?></div><?php endif; ?></section></main>
-<?php if(event_day_status($event)==='upcoming'): ?><a class="button" style="position:fixed;right:24px;bottom:24px;z-index:5" href="?page=edit-event&id=<?=$event['id']?>">Edit event</a><?php endif; ?>
+<?php if(event_day_status($event)==='upcoming'): ?><a class="button" style="position:fixed;right:24px;bottom:24px;z-index:5" href="<?=e(organizer_event_url($event,true))?>">Edit event</a><?php endif; ?>
 <?php } else: http_response_code(404); ?><main class="shell empty">Page not found.</main><?php endif; footer_html();
