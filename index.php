@@ -27,7 +27,10 @@ ob_start(static function (string $html): string {
     if (str_contains($html, 'id="guest-link"') && isset($_GET['token']) && ($currentUser = user())) {
         $currentEvent = event_for_owner_token((string)$_GET['token'], (int)$currentUser['id']);
         $eventId = (int)($currentEvent['id'] ?? 0);
-        $downloadButton = '<p class="event-downloads"><button class="button light presentation-qr-create" type="button" data-event-id="'.$eventId.'">Create Presentation QR</button></p>';
+        $eventTitle = htmlspecialchars((string)($currentEvent['title'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $eventDate = !empty($currentEvent['event_date']) ? date('F j, Y', strtotime((string)$currentEvent['event_date'])) : '';
+        $eventTime = !empty($currentEvent['start_time']) ? date('g:i A', strtotime((string)$currentEvent['start_time'])).' – '.date('g:i A', strtotime((string)$currentEvent['end_time'])) : '';
+        $downloadButton = '<p class="event-downloads"><button class="button light presentation-qr-create" type="button" data-event-id="'.$eventId.'" data-event-title="'.$eventTitle.'" data-event-date="'.htmlspecialchars($eventDate,ENT_QUOTES,'UTF-8').'" data-event-time="'.htmlspecialchars($eventTime,ENT_QUOTES,'UTF-8').'">Create Presentation QR</button></p>';
         $html = preg_replace('~(<div class="copyline">.*?</div>)~s', '$1'.$downloadButton, $html, 1) ?? $html;
         if (is_file(album_storage_path($eventId)) && !str_contains($html, 'class="gallery"')) {
             $archivedAlbum = '<section class="card archived-album"><div><div class="eyebrow">Saved event album</div><h2>Photo album archive</h2><p class="muted">The original event photos have expired. Your last generated offline album remains available.</p></div><div class="actions"><a class="button" href="?action=download_photo_album&amp;event_id='.$eventId.'">Download photo album</a><button class="button light album-share" type="button" data-event-id="'.$eventId.'">Copy shareable album link</button></div></section>';
@@ -36,7 +39,7 @@ ob_start(static function (string $html): string {
     }
     return str_replace(
         ['</head>','</body>'],
-        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=15"><link rel="stylesheet" href="assets/hero.css?v=1"><link rel="stylesheet" href="assets/dashboard.css?v=2"></head>','<script src="assets/gallery.js?v=12"></script><script src="assets/presentation-qr.js?v=1"></script></body>'],
+        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=15"><link rel="stylesheet" href="assets/hero.css?v=1"><link rel="stylesheet" href="assets/dashboard.css?v=2"><link rel="stylesheet" href="assets/reel.css?v=1"></head>','<script src="assets/reel.js?v=1"></script><script src="assets/gallery.js?v=13"></script><script src="assets/presentation-qr.js?v=1"></script></body>'],
         $html
     );
 });

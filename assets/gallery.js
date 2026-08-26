@@ -28,7 +28,7 @@
   toolbar.id = 'gallery-download';
   toolbar.method = 'post';
   toolbar.action = '?action=download_zip';
-  toolbar.innerHTML = `<input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="event_id" value="${eventId || ''}"><input type="hidden" name="all_photos" value="1" data-all-photos disabled><label><input type="checkbox" data-select-all> Select all photos</label><span data-selected>0 selected</span><button type="submit" disabled>Download ZIP</button><button class="button light album-create" type="button">Create Photo Album</button><button class="button light album-share" type="button">Copy shareable album link</button>`;
+  toolbar.innerHTML = `<input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="event_id" value="${eventId || ''}"><input type="hidden" name="all_photos" value="1" data-all-photos disabled><label><input type="checkbox" data-select-all> Select all photos</label><span data-selected>0 selected</span><button type="submit" disabled>Download ZIP</button><button class="button light reel-create" type="button" data-reel-create disabled>Create 15s Reel</button><button class="button light album-create" type="button">Create Photo Album</button><button class="button light album-share" type="button">Copy shareable album link</button>`;
   document.querySelector('.gallery').before(toolbar);
   const selectedLabel = toolbar.querySelector('[data-selected]');
   const downloadButton = toolbar.querySelector('button');
@@ -50,6 +50,7 @@
   const pageNext = pagination.querySelector('[data-page-next]');
   const pageStatus = pagination.querySelector('[data-page-status]');
   const shareButton = toolbar.querySelector('.album-share');
+  const reelButton = toolbar.querySelector('[data-reel-create]');
   bindAlbumShare(shareButton, eventId);
   const albumCreate = toolbar.querySelector('.album-create');
 
@@ -112,6 +113,7 @@
       if (!response.ok || !data.ok) throw new Error(data.error || 'The photo could not be deleted.');
       const index = links.indexOf(pendingDeleteLink);
       if (index >= 0) {
+        selectionOrder = selectionOrder.filter(url => url !== pendingDeleteLink.href);
         shots[index].remove();
         links.splice(index, 1);
         shots.splice(index, 1);
@@ -143,6 +145,7 @@
   deleteModal.addEventListener('click', event => { if (event.target === deleteModal) closeDeleteModal(); });
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && !deleteModal.hidden) closeDeleteModal(); });
 
+  let selectionOrder = [];
   let checks = links.map(link => {
     const fileName = decodeURIComponent(new URL(link.href).pathname.split('/').pop());
     const label = document.createElement('label');
@@ -188,6 +191,8 @@
     const count = checks.filter(check => check.checked).length;
     selectedLabel.textContent = `${count} selected`;
     downloadButton.disabled = count === 0;
+    reelButton.disabled = count < 8 || count > 10;
+    reelButton.title = count < 8 ? 'Select at least 8 photos' : (count > 10 ? 'Select no more than 10 photos' : 'Create a 15-second video reel');
     selectAll.checked = checks.length > 0 && count === checks.length;
     selectAll.indeterminate = count > 0 && count < checks.length;
     allPhotos.disabled = !selectAll.checked;
@@ -197,8 +202,9 @@
     });
     links.forEach((link,index) => link.closest('.shot').classList.toggle('is-selected',checks[index].checked));
   }
-  checks.forEach(check => check.addEventListener('change',updateSelection));
-  selectAll.addEventListener('change',() => { checks.forEach(check => { check.checked = selectAll.checked; }); updateSelection(); });
+  checks.forEach((check,index) => check.addEventListener('change',()=>{const url=links[index].href;if(check.checked&&!selectionOrder.includes(url))selectionOrder.push(url);if(!check.checked)selectionOrder=selectionOrder.filter(item=>item!==url);updateSelection();}));
+  selectAll.addEventListener('change',() => { checks.forEach(check => { check.checked = selectAll.checked; }); selectionOrder=selectAll.checked?links.map(link=>link.href):[]; updateSelection(); });
+  reelButton.addEventListener('click',()=>{const selected=selectionOrder.filter(url=>links.some((link,index)=>link.href===url&&checks[index]?.checked));const metadataSource=document.querySelector('.presentation-qr-create');window.POVentsReel?.open({images:selected,title:metadataSource?.dataset.eventTitle||document.querySelector('.dash-head h1')?.textContent||'POVents Event',date:metadataSource?.dataset.eventDate||'',time:metadataSource?.dataset.eventTime||''});});
   pagePrevious.addEventListener('click', () => renderPage(currentPage - 1));
   pageNext.addEventListener('click', () => renderPage(currentPage + 1));
   renderPage(0);
