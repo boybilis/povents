@@ -22,6 +22,7 @@
   const token = camera.dataset.token;
   let facingMode = 'environment';
   let stream;
+  let imageCapture = null;
   let remaining = Number(camera.dataset.remaining || 5);
   let nativeCapture = false;
 
@@ -52,11 +53,13 @@
       if (location.protocol !== 'https:' || !window.isSecureContext || !navigator.mediaDevices?.getUserMedia) { useNativeCamera(); return; }
       if (stream) stream.getTracks().forEach(track => track.stop());
       stream = await Promise.race([
-        navigator.mediaDevices.getUserMedia({video: {facingMode}, audio: false}),
+        navigator.mediaDevices.getUserMedia({video: {facingMode, width: {ideal: 1920}, height: {ideal: 1920}}, audio: false}),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Camera preview timed out')), 5000)),
       ]);
       nativeCapture = false;
       video.srcObject = stream;
+      const videoTrack = stream.getVideoTracks()[0];
+      imageCapture = 'ImageCapture' in window && videoTrack ? new ImageCapture(videoTrack) : null;
       switchButton.style.display = '';
       setStatus(`${remaining} photo${remaining === 1 ? '' : 's'} remaining`);
     } catch (_) {
@@ -107,10 +110,19 @@
       return;
     }
     capture.disabled = true;
-    canvas.width = Math.min(video.videoWidth, 1600);
-    canvas.height = Math.round(canvas.width * video.videoHeight / video.videoWidth);
-    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .88));
+    let blob = null;
+    if (imageCapture) {
+      try {
+        const fullResolution = await imageCapture.takePhoto();
+        if (fullResolution.size <= 7.5 * 1024 * 1024) blob = fullResolution;
+      } catch (_) {}
+    }
+    if (!blob) {
+      canvas.width = Math.min(video.videoWidth, 2400);
+      canvas.height = Math.round(canvas.width * video.videoHeight / video.videoWidth);
+      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+      blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .9));
+    }
     await upload(blob);
   });
 
