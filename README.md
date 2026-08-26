@@ -17,7 +17,7 @@ If the original schema was already imported, run `migrate-v2.sql` once instead o
 
 ## Payments and retention
 
-The checkout uses PayMongo-hosted payment pages. The plan is activated only by a signed `checkout_session.payment.paid` webhook. Start with `sk_test_...`, then replace it with a live secret key when your PayMongo account is approved.
+The checkout uses PayMongo-hosted QRPh payment pages. The plan is activated only by a signed `checkout_session.payment.paid` webhook. Start with `sk_test_...`, then replace it with a live secret key when your PayMongo account and QRPh payment method are approved.
 
 Every photo receives its own seven-day expiry timestamp. The organizer gallery shows the remaining time; expired database records and image files are permanently removed.
 
