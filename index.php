@@ -12,9 +12,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             check_csrf();
             $token = preg_replace('/[^a-f0-9]/', '', $_POST['token'] ?? '');
-            $s = db()->prepare('SELECT * FROM events WHERE token=? AND is_active=1 AND (event_date IS NULL OR DATE_ADD(event_date,INTERVAL 8 DAY)>NOW())'); $s->execute([$token]);
+            $s = db()->prepare('SELECT * FROM events WHERE token=? AND is_active=1'); $s->execute([$token]);
             $event = $s->fetch();
             if (!$event) throw new RuntimeException('This event is no longer accepting photos.');
+            if (event_day_status($event) !== 'open') throw new RuntimeException('This event camera is only available on the event date.');
             $sessionId = $_SESSION['capture'][$token] ?? null;
             if (!$sessionId) throw new RuntimeException('Capture session expired. Reload the page.');
             db()->beginTransaction();
@@ -106,8 +107,15 @@ if ($page === 'capture') {
     header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
     header('Pragma: no-cache');
     header('Expires: 0');
-    $token=preg_replace('/[^a-f0-9]/','',$_GET['token'] ?? ''); $s=db()->prepare('SELECT * FROM events WHERE token=? AND is_active=1 AND (event_date IS NULL OR DATE_ADD(event_date,INTERVAL 8 DAY)>NOW())'); $s->execute([$token]); $event=$s->fetch();
+    $token=preg_replace('/[^a-f0-9]/','',$_GET['token'] ?? ''); $s=db()->prepare('SELECT * FROM events WHERE token=? AND is_active=1'); $s->execute([$token]); $event=$s->fetch();
     if (!$event) { http_response_code(404); exit('This photo event is unavailable.'); }
+    $dayStatus=event_day_status($event);
+    if ($dayStatus !== 'open') {
+        $message=$dayStatus==='upcoming'
+            ? 'The camera opens on '.date('F j, Y',strtotime($event['event_date'])).'. Come back on the event day.'
+            : 'This event is already done. Photo uploads are now closed.';
+        ?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title><?=e($event['title'])?> · POVents</title><link rel="stylesheet" href="assets/style.css"></head><body class="camera-page"><main class="camera-shell" style="min-height:100vh;display:grid;place-items:center"><section class="card" style="text-align:center;color:#17231f"><div class="eyebrow"><?=e($event['title'])?></div><h1 style="font-size:48px;letter-spacing:-2px"><?=$dayStatus==='upcoming'?'Not yet!':'That’s a wrap.'?></h1><p class="lead"><?=e($message)?></p></section></main></body></html><?php exit;
+    }
     $sid=$_SESSION['capture'][$token] ?? null; $count=0; $validSession=false;
     if ($sid) {
         $s=db()->prepare('SELECT photo_count FROM capture_sessions WHERE id=? AND event_id=? AND expires_at>NOW()');

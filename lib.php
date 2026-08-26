@@ -10,8 +10,15 @@ function cfg(?string $key = null): mixed {
             exit('Copy config.example.php to config.php and enter your database details.');
         }
         $config = require $file;
+        date_default_timezone_set($config['timezone'] ?? 'Asia/Manila');
     }
     return $key === null ? $config : ($config[$key] ?? null);
+}
+
+function event_day_status(array $event): string {
+    if (!$event['event_date']) return 'open';
+    $today = (new DateTimeImmutable('today'))->format('Y-m-d');
+    return $today < $event['event_date'] ? 'upcoming' : ($today > $event['event_date'] ? 'finished' : 'open');
 }
 
 function db(): PDO {

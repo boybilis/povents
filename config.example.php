@@ -2,6 +2,7 @@
 return [
     'app_name' => 'POVents',
     'base_url' => 'https://your-domain.com',
+    'timezone' => 'Asia/Manila',
     'db' => [
         'host' => 'localhost',
         'name' => 'u123456789_povents',
