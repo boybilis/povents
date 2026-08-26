@@ -48,7 +48,10 @@
     try {
       if (location.protocol !== 'https:' || !window.isSecureContext || !navigator.mediaDevices?.getUserMedia) { useNativeCamera(); return; }
       if (stream) stream.getTracks().forEach(track => track.stop());
-      stream = await navigator.mediaDevices.getUserMedia({video: {facingMode}, audio: false});
+      stream = await Promise.race([
+        navigator.mediaDevices.getUserMedia({video: {facingMode}, audio: false}),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Camera preview timed out')), 5000)),
+      ]);
       video.srcObject = stream;
       setStatus(`${remaining} photo${remaining === 1 ? '' : 's'} remaining`);
     } catch (_) {
@@ -89,7 +92,12 @@
       fileCamera.click();
       return;
     }
-    if (!video.videoWidth) return;
+    if (!video.videoWidth) {
+      useNativeCamera();
+      fileCamera.value = '';
+      fileCamera.click();
+      return;
+    }
     capture.disabled = true;
     canvas.width = Math.min(video.videoWidth, 1600);
     canvas.height = Math.round(canvas.width * video.videoHeight / video.videoWidth);
