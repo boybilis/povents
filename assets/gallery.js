@@ -18,7 +18,7 @@
   }
 
   document.querySelectorAll('.album-share[data-event-id]').forEach(button => bindAlbumShare(button, button.dataset.eventId));
-  const links = [...document.querySelectorAll('.gallery .shot a')];
+  let links = [...document.querySelectorAll('.gallery .shot a')];
   if (!links.length) return;
 
   const eventId = new URLSearchParams(location.search).get('id');
@@ -35,9 +35,9 @@
   const selectAll = toolbar.querySelector('[data-select-all]');
   const allPhotos = toolbar.querySelector('[data-all-photos]');
   const gallery = document.querySelector('.gallery');
-  const shots = links.map(link => link.closest('.shot'));
+  let shots = links.map(link => link.closest('.shot'));
   const photosPerPage = 30;
-  const totalPages = Math.ceil(links.length / photosPerPage);
+  let totalPages = Math.ceil(links.length / photosPerPage);
   let currentPage = 0;
   links.forEach(link => { const image = link.querySelector('img'); if (image) { image.loading = 'lazy'; image.decoding = 'async'; } });
   const pagination = document.createElement('nav');
@@ -58,12 +58,14 @@
   deleteModal.setAttribute('role', 'dialog');
   deleteModal.setAttribute('aria-modal', 'true');
   deleteModal.setAttribute('aria-labelledby', 'delete-photo-title');
-  deleteModal.innerHTML = `<div class="delete-modal__panel"><img class="delete-modal__preview" alt="Photo selected for deletion"><div class="delete-modal__content"><div class="eyebrow">Permanent deletion</div><h2 id="delete-photo-title">Delete this photo?</h2><p>This image will be erased from the server and removed from the event gallery. This action cannot be undone.</p><div class="delete-modal__actions"><button class="button light" type="button" data-delete-cancel>Cancel</button><button class="button delete-modal__confirm" type="button" data-delete-confirm>Delete permanently</button></div></div></div>`;
+  deleteModal.innerHTML = `<div class="delete-modal__panel"><img class="delete-modal__preview" alt="Photo selected for deletion"><div class="delete-modal__content"><div class="eyebrow">Permanent deletion</div><h2 id="delete-photo-title">Delete this photo?</h2><p>This image will be erased from the server and removed from the event gallery. This action cannot be undone.</p><p class="delete-modal__error" data-delete-error hidden></p><div class="delete-modal__actions"><button class="button light" type="button" data-delete-cancel>Cancel</button><button class="button delete-modal__confirm" type="button" data-delete-confirm>Delete permanently</button></div></div></div>`;
   document.body.appendChild(deleteModal);
   const deletePreview = deleteModal.querySelector('.delete-modal__preview');
   const deleteCancel = deleteModal.querySelector('[data-delete-cancel]');
   const deleteConfirm = deleteModal.querySelector('[data-delete-confirm]');
+  const deleteError = deleteModal.querySelector('[data-delete-error]');
   let pendingDeleteForm = null;
+  let pendingDeleteLink = null;
   let deleteTrigger = null;
   function closeDeleteModal() {
     deleteModal.hidden = true;
@@ -71,18 +73,57 @@
     document.body.style.overflow = '';
     deleteTrigger?.focus();
     pendingDeleteForm = null;
+    pendingDeleteLink = null;
   }
   deleteCancel.addEventListener('click', closeDeleteModal);
-  deleteConfirm.addEventListener('click', () => {
+  deleteConfirm.addEventListener('click', async () => {
     if (!pendingDeleteForm) return;
     deleteConfirm.disabled = true;
     deleteConfirm.textContent = 'Deleting…';
-    pendingDeleteForm.submit();
+    deleteCancel.disabled = true;
+    deleteError.hidden = true;
+    try {
+      const response = await fetch(pendingDeleteForm.action, {
+        method: 'POST',
+        body: new FormData(pendingDeleteForm),
+        headers: {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || 'The photo could not be deleted.');
+      const index = links.indexOf(pendingDeleteLink);
+      if (index >= 0) {
+        shots[index].remove();
+        links.splice(index, 1);
+        shots.splice(index, 1);
+        checks.splice(index, 1);
+      }
+      document.querySelector('.dash-head > strong')?.replaceChildren(document.createTextNode(`${data.remaining_count} photos`));
+      closeDeleteModal();
+      if (!links.length) {
+        toolbar.remove();
+        pagination.remove();
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = 'No photos yet. Share the QR code and watch this gallery come alive.';
+        gallery.replaceWith(empty);
+        return;
+      }
+      totalPages = Math.ceil(links.length / photosPerPage);
+      currentPage = Math.min(currentPage, totalPages - 1);
+      pagination.hidden = totalPages <= 1;
+      renderPage(currentPage);
+    } catch (error) {
+      deleteError.textContent = error.message || 'The photo could not be deleted.';
+      deleteError.hidden = false;
+      deleteConfirm.disabled = false;
+      deleteConfirm.textContent = 'Try again';
+      deleteCancel.disabled = false;
+    }
   });
   deleteModal.addEventListener('click', event => { if (event.target === deleteModal) closeDeleteModal(); });
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && !deleteModal.hidden) closeDeleteModal(); });
 
-  const checks = links.map(link => {
+  let checks = links.map(link => {
     const fileName = decodeURIComponent(new URL(link.href).pathname.split('/').pop());
     const label = document.createElement('label');
     label.className = 'photo-select';
@@ -96,10 +137,13 @@
     deleteForm.addEventListener('submit', event => {
       event.preventDefault();
       pendingDeleteForm = deleteForm;
+      pendingDeleteLink = link;
       deleteTrigger = deleteForm.querySelector('button');
       deletePreview.src = link.href;
       deleteConfirm.disabled = false;
       deleteConfirm.textContent = 'Delete permanently';
+      deleteCancel.disabled = false;
+      deleteError.hidden = true;
       deleteModal.hidden = false;
       document.body.style.overflow = 'hidden';
       deleteCancel.focus();

@@ -34,7 +34,7 @@ ob_start(static function (string $html): string {
     }
     return str_replace(
         ['</head>','</body>'],
-        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=12"></head>','<script src="assets/gallery.js?v=9"></script></body>'],
+        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=13"></head>','<script src="assets/gallery.js?v=10"></script></body>'],
         $html
     );
 });
@@ -110,8 +110,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     check_csrf();
     if ($action === 'delete_photo') {
+        $wantsJson=str_contains($_SERVER['HTTP_ACCEPT']??'','application/json') || ($_SERVER['HTTP_X_REQUESTED_WITH']??'')==='XMLHttpRequest';
         $u=require_user(); $event=event_for_owner((int)($_POST['event_id']??0),(int)$u['id']);
-        if (!$event) { http_response_code(404); exit('Event not found.'); }
+        if (!$event) { http_response_code(404); if($wantsJson){header('Content-Type: application/json');echo json_encode(['error'=>'Event not found.']);exit;} exit('Event not found.'); }
         $fileName=basename((string)($_POST['file_name']??''));
         db()->beginTransaction();
         try {
@@ -124,9 +125,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (is_file($path) && !unlink($path)) throw new RuntimeException('The photo file could not be erased from the server.');
             db()->prepare('DELETE FROM photos WHERE id=?')->execute([$photo['id']]);
             db()->commit();
+            $remaining=db()->prepare('SELECT COUNT(*) FROM photos WHERE event_id=? AND expires_at>NOW()');
+            $remaining->execute([$event['id']]); $remainingCount=(int)$remaining->fetchColumn();
+            if($wantsJson){header('Content-Type: application/json');echo json_encode(['ok'=>true,'remaining_count'=>$remainingCount]);exit;}
             flash('success','The photo was permanently deleted. Download the photo album again to create an updated saved copy.');
         } catch (Throwable $e) {
             if (db()->inTransaction()) db()->rollBack();
+            if($wantsJson){header('Content-Type: application/json');http_response_code(400);echo json_encode(['error'=>$e->getMessage()]);exit;}
             flash('error',$e->getMessage());
         }
         go('?page=event&id='.$event['id']);
