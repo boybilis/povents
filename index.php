@@ -2,7 +2,16 @@
 declare(strict_types=1);
 session_start();
 require __DIR__ . '/lib.php';
-ob_start(static fn(string $html): string => str_replace(['</head>','</body>'], ['<link rel="stylesheet" href="assets/responsive.css?v=4"></head>','<script src="assets/gallery.js?v=2"></script></body>'], $html));
+ob_start(static function (string $html): string {
+    $html = str_replace('<i></i>POVents', '<img src="assets/povents-logo.png" alt="POVents">', $html);
+    $html = str_replace('<footer class="shell section muted">POVents', '<footer class="shell section muted"><img class="footer-logo" src="assets/povents-logo.png" alt="POVents">', $html);
+    $html = str_replace('<section class="card" style="text-align:center;color:#17231f"><div class="eyebrow">', '<section class="card" style="text-align:center;color:#17231f"><img class="message-logo" src="assets/povents-logo.png" alt="POVents"><div class="eyebrow">', $html);
+    return str_replace(
+        ['</head>','</body>'],
+        ['<link rel="icon" href="assets/povents-logo.png"><link rel="stylesheet" href="assets/responsive.css?v=5"></head>','<script src="assets/gallery.js?v=2"></script></body>'],
+        $html
+    );
+});
 
 $page = $_GET['page'] ?? 'home';
 $action = $_GET['action'] ?? '';

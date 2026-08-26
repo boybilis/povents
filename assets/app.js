@@ -22,6 +22,11 @@
   const watermarkPreview = document.createElement('div');
   watermarkPreview.className = 'watermark-preview';
   watermarkPreview.hidden = true;
+  const watermarkPreviewLogo = new Image();
+  watermarkPreviewLogo.src = 'assets/povents-logo.png';
+  watermarkPreviewLogo.alt = 'POVents';
+  const watermarkPreviewCaption = document.createElement('span');
+  watermarkPreview.append(watermarkPreviewLogo, watermarkPreviewCaption);
   camera.appendChild(watermarkPreview);
   const captionInput = reviewControls.querySelector('[data-caption]');
   const galleryTitle = document.createElement('div');
@@ -41,6 +46,13 @@
   let pendingPreviewUrl = '';
   let previewTimer = null;
   let cameraRequestId = 0;
+  const watermarkLogo = new Image();
+  watermarkLogo.src = 'assets/povents-logo.png';
+  const watermarkLogoReady = new Promise((resolve, reject) => {
+    watermarkLogo.onload = resolve;
+    watermarkLogo.onerror = reject;
+    if (watermarkLogo.complete && watermarkLogo.naturalWidth) resolve();
+  });
 
   const setStatus = (message, error = false) => {
     status.textContent = message;
@@ -118,6 +130,7 @@
   }
 
   async function addWatermark(blob, caption) {
+    await watermarkLogoReady;
     const bitmap = await createImageBitmap(blob);
     const targetRatio = bitmap.width >= bitmap.height ? 4 / 3 : 3 / 4;
     const sourceRatio = bitmap.width / bitmap.height;
@@ -138,14 +151,19 @@
     context.drawImage(bitmap, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
     const fontSize = Math.max(22, Math.min(54, Math.round(canvas.width * .035)));
     const padding = Math.round(fontSize * .7);
-    const text = caption ? `POVents  •  "${caption}"` : 'POVents';
     context.font = `700 ${fontSize}px system-ui, sans-serif`;
     context.textBaseline = 'middle';
-    const barHeight = fontSize + padding * 1.5;
-    context.fillStyle = 'rgba(4, 12, 9, .64)';
+    const logoHeight = Math.round(fontSize * 1.45);
+    const logoWidth = Math.round(logoHeight * watermarkLogo.naturalWidth / watermarkLogo.naturalHeight);
+    const barHeight = Math.max(logoHeight, fontSize) + padding * 1.5;
+    context.fillStyle = 'rgba(255, 255, 255, .78)';
     context.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
-    context.fillStyle = '#ffffff';
-    context.fillText(text, padding, canvas.height - barHeight / 2, canvas.width - padding * 2);
+    const logoY = canvas.height - barHeight / 2 - logoHeight / 2;
+    context.drawImage(watermarkLogo, padding, logoY, logoWidth, logoHeight);
+    if (caption) {
+      context.fillStyle = '#072a20';
+      context.fillText(`“${caption}”`, padding + logoWidth + padding, canvas.height - barHeight / 2, canvas.width - logoWidth - padding * 3);
+    }
     bitmap.close?.();
     return await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 1));
   }
@@ -203,7 +221,7 @@
     reviewControls.style.pointerEvents = 'auto';
     reviewControls.querySelectorAll('button').forEach(button => { button.disabled = false; });
     captionInput.value = '';
-    watermarkPreview.textContent = 'POVents';
+    watermarkPreviewCaption.textContent = '';
     watermarkPreview.hidden = false;
     setStatus('Keep this photo or retake it?');
   }
@@ -228,7 +246,7 @@
 
   captionInput.addEventListener('input', () => {
     captionInput.value = captionInput.value.slice(0, 30);
-    watermarkPreview.textContent = captionInput.value ? `POVents  •  "${captionInput.value}"` : 'POVents';
+    watermarkPreviewCaption.textContent = captionInput.value ? `“${captionInput.value}”` : '';
   });
 
   reviewControls.querySelector('[data-approve]').addEventListener('click', async () => {

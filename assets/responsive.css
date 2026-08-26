@@ -33,6 +33,14 @@ button,.button,input{min-height:44px}
 .capture-review [data-caption]::placeholder{color:#ffffff9c}
 .watermark-preview{position:absolute;z-index:3;left:0;right:0;bottom:115px;padding:13px 20px;background:#040c09a3;color:#fff;font-weight:800;text-shadow:0 1px 3px #000;pointer-events:none}
 .watermark-preview[hidden]{display:none}
+.brand{display:inline-flex;align-items:center;text-decoration:none;line-height:1}
+.brand img{display:block;width:148px;max-width:38vw;height:auto}
+.camera-top .brand img{width:116px;filter:drop-shadow(0 1px 1px #fff8)}
+.watermark-preview{display:flex;align-items:center;gap:14px}
+.watermark-preview img{display:block;width:min(160px,42%);height:auto;filter:drop-shadow(0 1px 1px #fff)}
+.watermark-preview span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.message-logo{display:block;width:min(220px,65%);height:auto;margin:0 auto 28px}
+.footer-logo{display:inline-block;width:120px;height:auto;vertical-align:middle;margin-right:12px}
 
 @media (max-width:760px){
   .shell{width:calc(100% - 24px)}
