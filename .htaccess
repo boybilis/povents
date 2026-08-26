@@ -1,11 +1,12 @@
 Options -Indexes
 DirectoryIndex index.php
 
-<FilesMatch "^(config\.php|config\.example\.php|schema\.sql|migrate-v2\.sql)$">
+<FilesMatch "(?i)^(config(?:\.example)?\.php|schema\.sql|migrate-v[0-9]+\.sql|composer\.(?:json|lock)|README\.md|\.env(?:\..*)?)$">
   Require all denied
 </FilesMatch>
 
 RewriteEngine On
+RewriteRule ^vendor(?:/|$) - [F,L,NC]
 RewriteRule ^uploads/.*\.(php|phtml|phar)$ - [F,L,NC]
 
 <IfModule mod_headers.c>
