@@ -34,6 +34,7 @@
   const maxPhotoBytes = 1536 * 1024;
   let pendingPhoto = null;
   let pendingPreviewUrl = '';
+  let previewTimer = null;
 
   const setStatus = (message, error = false) => {
     status.textContent = message;
@@ -117,7 +118,8 @@
       lastPhoto.src = data.url;
       lastPhoto.style.display = 'block';
       if (!nativeCapture && remaining > 0) {
-        setTimeout(() => { lastPhoto.style.display = 'none'; }, 1200);
+        clearTimeout(previewTimer);
+        previewTimer = setTimeout(() => { lastPhoto.style.display = 'none'; }, 1200);
       }
       const img = new Image();
       img.src = data.url;
@@ -135,6 +137,7 @@
   }
 
   function review(blob) {
+    clearTimeout(previewTimer);
     pendingPhoto = blob;
     if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
     pendingPreviewUrl = URL.createObjectURL(blob);
@@ -142,14 +145,19 @@
     lastPhoto.style.display = 'block';
     normalControls.style.display = 'none';
     reviewControls.hidden = false;
+    reviewControls.style.display = 'grid';
+    reviewControls.style.pointerEvents = 'auto';
+    reviewControls.querySelectorAll('button').forEach(button => { button.disabled = false; });
     setStatus('Keep this photo or retake it?');
   }
 
   function finishReview(keepPreview = false) {
-    if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
+    if (pendingPreviewUrl && !keepPreview) URL.revokeObjectURL(pendingPreviewUrl);
     pendingPreviewUrl = '';
     pendingPhoto = null;
     reviewControls.hidden = true;
+    reviewControls.style.display = 'none';
+    reviewControls.style.pointerEvents = 'none';
     normalControls.style.display = 'flex';
     if (!keepPreview) lastPhoto.style.display = 'none';
   }
@@ -160,13 +168,15 @@
     setStatus(`${remaining} photo${remaining === 1 ? '' : 's'} remaining`);
   });
 
-  reviewControls.querySelector('[data-approve]').addEventListener('click', async event => {
+  reviewControls.querySelector('[data-approve]').addEventListener('click', async () => {
     if (!pendingPhoto) return;
-    event.currentTarget.disabled = true;
+    const approvedPhoto = pendingPhoto;
+    const approvedPreviewUrl = pendingPreviewUrl;
+    finishReview(true);
     setStatus('Uploading approved photo…');
-    const uploaded = await upload(pendingPhoto);
-    event.currentTarget.disabled = false;
-    if (uploaded) finishReview(true);
+    const uploaded = await upload(approvedPhoto);
+    if (approvedPreviewUrl) URL.revokeObjectURL(approvedPreviewUrl);
+    if (!uploaded) review(approvedPhoto);
   });
 
   capture.addEventListener('click', async () => {
