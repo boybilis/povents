@@ -68,14 +68,17 @@ function paymongo(string $method, string $path, ?array $body = null): array {
     return json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
 }
 
-function purge_expired_photos(): int {
-    $rows = db()->query('SELECT id,event_id,file_name FROM photos WHERE expires_at<=NOW() LIMIT 500')->fetchAll();
-    if (!$rows) return 0;
+function purge_expired_photos(int $maxBatches = 1): int {
     $delete = db()->prepare('DELETE FROM photos WHERE id=?'); $count = 0;
-    foreach ($rows as $row) {
-        $path = __DIR__ . '/uploads/' . $row['event_id'] . '/' . basename($row['file_name']);
-        if (is_file($path)) @unlink($path);
-        $delete->execute([$row['id']]); $count++;
+    for ($batch=0; $batch<$maxBatches; $batch++) {
+        $rows = db()->query('SELECT id,event_id,file_name FROM photos WHERE expires_at<=NOW() LIMIT 500')->fetchAll();
+        if (!$rows) break;
+        foreach ($rows as $row) {
+            $path = __DIR__ . '/uploads/' . $row['event_id'] . '/' . basename($row['file_name']);
+            if (is_file($path)) @unlink($path);
+            $delete->execute([$row['id']]); $count++;
+        }
+        if (count($rows) < 500) break;
     }
     return $count;
 }

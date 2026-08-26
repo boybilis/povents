@@ -12,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             check_csrf();
             $token = preg_replace('/[^a-f0-9]/', '', $_POST['token'] ?? '');
-            $s = db()->prepare('SELECT * FROM events WHERE token=? AND is_active=1'); $s->execute([$token]);
+            $s = db()->prepare('SELECT * FROM events WHERE token=? AND is_active=1 AND (event_date IS NULL OR DATE_ADD(event_date,INTERVAL 8 DAY)>NOW())'); $s->execute([$token]);
             $event = $s->fetch();
             if (!$event) throw new RuntimeException('This event is no longer accepting photos.');
             $sessionId = $_SESSION['capture'][$token] ?? null;
@@ -30,8 +30,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!is_dir($dir) && !mkdir($dir, 0755, true)) throw new RuntimeException('Storage is not writable.');
             $name = date('Ymd-His') . '-' . bin2hex(random_bytes(8)) . '.' . $ext;
             if (!move_uploaded_file($_FILES['photo']['tmp_name'], $dir . '/' . $name)) throw new RuntimeException('Could not save the photo.');
-            $s = db()->prepare('INSERT INTO photos(event_id,capture_session_id,file_name,mime_type,file_size,expires_at) VALUES(?,?,?,?,?,DATE_ADD(NOW(),INTERVAL ? DAY))');
-            $s->execute([$event['id'],$sessionId,$name,$mime,$_FILES['photo']['size'],(int)cfg('photo_retention_days')]);
+            $expiresAt = $event['event_date']
+                ? (new DateTimeImmutable($event['event_date'] . ' 23:59:59'))->modify('+' . (int)cfg('photo_retention_days') . ' days')->format('Y-m-d H:i:s')
+                : (new DateTimeImmutable())->modify('+' . (int)cfg('photo_retention_days') . ' days')->format('Y-m-d H:i:s');
+            $s = db()->prepare('INSERT INTO photos(event_id,capture_session_id,file_name,mime_type,file_size,expires_at) VALUES(?,?,?,?,?,?)');
+            $s->execute([$event['id'],$sessionId,$name,$mime,$_FILES['photo']['size'],$expiresAt]);
             db()->prepare('UPDATE capture_sessions SET photo_count=photo_count+1 WHERE id=?')->execute([$sessionId]);
             $remaining = (int)cfg('max_photos_per_session') - ((int)$captureSession['photo_count'] + 1);
             db()->commit();
@@ -83,12 +86,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'create_event') {
         $u=require_user(); if (!active_subscription($u)) go('?page=subscribe');
         $title=trim($_POST['title'] ?? ''); if (strlen($title)<3) { flash('error','Give your event a name.'); go('?page=new-event'); }
+        $eventDate=$_POST['event_date'] ?? '';
+        $parsedDate=DateTimeImmutable::createFromFormat('!Y-m-d',$eventDate);
+        if (!$parsedDate || $parsedDate->format('Y-m-d') !== $eventDate) { flash('error','Choose a valid event date.'); go('?page=new-event'); }
         db()->beginTransaction();
         $credit=db()->prepare("SELECT event_credits FROM users WHERE id=? AND subscription_status='active' AND event_credits>0 AND (subscription_ends_at IS NULL OR subscription_ends_at>NOW()) FOR UPDATE");
         $credit->execute([$u['id']]);
         if ($credit->fetchColumn() === false) { db()->rollBack(); go('?page=subscribe'); }
         $s=db()->prepare('INSERT INTO events(user_id,title,event_date,location,token) VALUES(?,?,?,?,?)');
-        $s->execute([$u['id'],$title,$_POST['event_date'] ?: null,trim($_POST['location'] ?? ''),bin2hex(random_bytes(16))]);
+        $s->execute([$u['id'],$title,$eventDate,trim($_POST['location'] ?? ''),bin2hex(random_bytes(16))]);
         $eventId=(int)db()->lastInsertId();
         db()->prepare("UPDATE users SET subscription_status=IF(event_credits=1,'inactive','active'),event_credits=event_credits-1 WHERE id=?")->execute([$u['id']]);
         db()->commit(); refresh_user((int)$u['id']);
@@ -100,7 +106,7 @@ if ($page === 'capture') {
     header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
     header('Pragma: no-cache');
     header('Expires: 0');
-    $token=preg_replace('/[^a-f0-9]/','',$_GET['token'] ?? ''); $s=db()->prepare('SELECT * FROM events WHERE token=? AND is_active=1'); $s->execute([$token]); $event=$s->fetch();
+    $token=preg_replace('/[^a-f0-9]/','',$_GET['token'] ?? ''); $s=db()->prepare('SELECT * FROM events WHERE token=? AND is_active=1 AND (event_date IS NULL OR DATE_ADD(event_date,INTERVAL 8 DAY)>NOW())'); $s->execute([$token]); $event=$s->fetch();
     if (!$event) { http_response_code(404); exit('This photo event is unavailable.'); }
     $sid=$_SESSION['capture'][$token] ?? null; $count=0; $validSession=false;
     if ($sid) {
@@ -133,7 +139,7 @@ if ($page === 'home'): ?>
 <?php elseif ($page === 'dashboard'): $u=require_user(); $s=db()->prepare('SELECT e.*,COUNT(p.id) photos FROM events e LEFT JOIN photos p ON p.event_id=e.id WHERE e.user_id=? GROUP BY e.id ORDER BY e.created_at DESC');$s->execute([$u['id']]);$events=$s->fetchAll();$photos=array_sum(array_column($events,'photos')); ?>
 <main class="shell"><div class="dash-head"><div><div class="eyebrow">Organizer studio</div><h1>Hello, <?=e(explode(' ',$u['name'])[0])?>.</h1></div><a class="button" href="<?=active_subscription($u)?'?page=new-event':'?page=subscribe'?>"><?=active_subscription($u)?'+ New event':'Buy event pass'?></a></div><section class="stats"><div class="stat"><span>Events</span><strong><?=count($events)?></strong></div><div class="stat"><span>Photos collected</span><strong><?=$photos?></strong></div><div class="stat"><span>Event passes</span><strong><?=(int)($u['event_credits']??0)?></strong></div></section><?php if(!$events): ?><div class="empty"><h3>Your first story starts here.</h3><p>Use one event pass to create an event and receive its guest QR code.</p><a class="button" href="<?=active_subscription($u)?'?page=new-event':'?page=subscribe'?>"><?=active_subscription($u)?'Create event':'Buy event pass'?></a></div><?php else: ?><div class="event-list"><?php foreach($events as $event): ?><a class="event-row" href="?page=event&id=<?=$event['id']?>"><div><h3><?=e($event['title'])?></h3><span class="muted"><?=e($event['event_date'] ?: 'Date not set')?> · <?=e($event['location'] ?: 'Location not set')?></span></div><strong><?=$event['photos']?> photos →</strong></a><?php endforeach; ?></div><?php endif; ?></main>
 <?php elseif ($page === 'new-event'): $u=require_user(); if(!active_subscription($u)) go('?page=subscribe'); ?>
-<main class="shell auth-wrap"><section class="card auth"><div class="eyebrow">New collection</div><h1>Create event</h1><form method="post" action="?action=create_event"><div class="field"><label for="title">Event name</label><input id="title" name="title" placeholder="Maya & Luis' wedding" required></div><div class="field"><label for="date">Date</label><input id="date" name="event_date" type="date"></div><div class="field"><label for="location">Location</label><input id="location" name="location" placeholder="The Glass Garden"></div><input type="hidden" name="csrf" value="<?=csrf()?>"><button class="full">Create event & QR</button></form></section></main>
+<main class="shell auth-wrap"><section class="card auth"><div class="eyebrow">New collection</div><h1>Create event</h1><form method="post" action="?action=create_event"><div class="field"><label for="title">Event name</label><input id="title" name="title" placeholder="Maya & Luis' wedding" required></div><div class="field"><label for="date">Event date</label><input id="date" name="event_date" type="date" required></div><div class="field"><label for="location">Location</label><input id="location" name="location" placeholder="The Glass Garden"></div><input type="hidden" name="csrf" value="<?=csrf()?>"><button class="full">Create event & QR</button></form><p class="muted" style="font-size:13px">All event photos are permanently deleted seven days after this date.</p></section></main>
 <?php elseif ($page === 'event'): $u=require_user();$event=event_for_owner((int)($_GET['id']??0),(int)$u['id']);if(!$event){http_response_code(404);echo '<main class="shell empty">Event not found.</main>';}else{$s=db()->prepare('SELECT * FROM photos WHERE event_id=? AND expires_at>NOW() ORDER BY created_at DESC');$s->execute([$event['id']]);$photos=$s->fetchAll();$guest=url('?page=capture&token='.$event['token']);$qr='https://api.qrserver.com/v1/create-qr-code/?size=520x520&data='.rawurlencode($guest);$soonest=$photos?min(array_map(fn($p)=>strtotime($p['expires_at']),$photos)):null; ?>
 <main class="shell"><div class="dash-head"><div><a class="muted" href="?page=dashboard">← All events</a><h1><?=e($event['title'])?></h1><p class="muted"><?=e($event['event_date']?:'Date not set')?> · <?=e($event['location']?:'Location not set')?></p></div><strong><?=count($photos)?> photos</strong></div><section class="card qr-panel"><img src="<?=e($qr)?>" alt="Guest camera QR code"><div><div class="eyebrow">Guest camera link</div><h2>Print it. Place it. Let guests shoot.</h2><p class="muted">Each new scan opens the camera and allows up to five photo uploads.</p><div class="copyline"><input id="guest-link" readonly value="<?=e($guest)?>"><button type="button" onclick="navigator.clipboard.writeText(document.getElementById('guest-link').value);this.textContent='Copied!'">Copy</button></div><p><a href="<?=e($guest)?>" target="_blank">Preview guest camera →</a></p></div></section><?php if($soonest): ?><div class="alert" style="margin-top:18px"><strong>7-day storage:</strong> The earliest photos expire <?=date('M j, Y \a\t g:i A',$soonest)?>. Download originals before they are permanently erased.</div><?php endif; ?><section class="section"><div class="section-head"><div><div class="eyebrow">Live gallery</div><h2>Every point of view</h2></div><button class="button light" onclick="location.reload()">Refresh photos</button></div><?php if(!$photos): ?><div class="empty">No photos yet. Share the QR code and watch this gallery come alive.</div><?php else: ?><div class="gallery"><?php foreach($photos as $photo): ?><figure class="shot"><a href="uploads/<?=$event['id']?>/<?=e($photo['file_name'])?>" download><img loading="lazy" src="uploads/<?=$event['id']?>/<?=e($photo['file_name'])?>" alt="Guest photo"></a><time><?=max(1,(int)ceil((strtotime($photo['expires_at'])-time())/86400))?>d left</time></figure><?php endforeach; ?></div><?php endif; ?></section></main>
 <?php } else: http_response_code(404); ?><main class="shell empty">Page not found.</main><?php endif; footer_html();

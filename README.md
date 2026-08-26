@@ -19,6 +19,6 @@ If the original schema was already imported, run `migrate-v2.sql` and then `migr
 
 The checkout uses PayMongo-hosted QRPh payment pages. Each confirmed payment adds one event pass, and creating an event consumes that pass. Activation happens only through a signed `checkout_session.payment.paid` webhook. Start with `sk_test_...`, then replace it with a live secret key when your PayMongo account and QRPh payment method are approved.
 
-Every photo receives its own seven-day expiry timestamp. The organizer gallery shows the remaining time; expired database records and image files are permanently removed.
+Every photo expires at the end of the seventh day after its event date. The organizer gallery shows the remaining time; the hourly cleanup permanently removes both expired database records and physical image files so they no longer consume server storage.
 
 Camera access requires HTTPS, which Hostinger provides through SSL. Uploaded files are type-checked, randomly named, and executable file types are blocked by `.htaccess`.
