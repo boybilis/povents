@@ -46,8 +46,9 @@ function csrf(): string { return $_SESSION['csrf'] ??= bin2hex(random_bytes(24))
 function check_csrf(): void { if (!hash_equals($_SESSION['csrf'] ?? '', $_POST['csrf'] ?? '')) { http_response_code(419); exit('Your session expired. Please refresh and try again.'); } }
 function flash(string $type, string $message): void { $_SESSION['flash'] = compact('type', 'message'); }
 function pull_flash(): ?array { $f = $_SESSION['flash'] ?? null; unset($_SESSION['flash']); return $f; }
+function is_admin(array $u): bool { return (int)($u['is_admin'] ?? 0) === 1; }
 function active_subscription(array $u): bool {
-    return $u['subscription_status'] === 'active' && (int)($u['event_credits'] ?? 0) > 0 && (!$u['subscription_ends_at'] || strtotime($u['subscription_ends_at']) > time());
+    return is_admin($u) || ($u['subscription_status'] === 'active' && (int)($u['event_credits'] ?? 0) > 0 && (!$u['subscription_ends_at'] || strtotime($u['subscription_ends_at']) > time()));
 }
 function local_payment_bypass(): bool {
     if (cfg('local_payment_bypass') !== true) return false;
@@ -55,7 +56,7 @@ function local_payment_bypass(): bool {
     return in_array($host, ['localhost', '127.0.0.1', '::1'], true) || filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_NO_PRIV_RANGE) === false && filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false;
 }
 function refresh_user(int $id): void {
-    $s = db()->prepare('SELECT id,name,email,subscription_status,subscription_ends_at,event_credits FROM users WHERE id=?');
+    $s = db()->prepare('SELECT id,name,email,is_admin,subscription_status,subscription_ends_at,event_credits FROM users WHERE id=?');
     $s->execute([$id]); $_SESSION['user'] = $s->fetch();
 }
 function event_for_owner(int $id, int $userId): ?array {

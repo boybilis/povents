@@ -7,6 +7,12 @@ ob_start(static function (string $html): string {
     $html = str_replace('<span class="brand"><img src="assets/povents-logo.png" alt="POVents"></span>', '<span class="brand"><img src="assets/povents-logo-dark.png" alt="POVents"></span>', $html);
     $html = str_replace('<footer class="shell section muted">POVents', '<footer class="shell section muted"><img class="footer-logo" src="assets/povents-logo.png" alt="POVents">', $html);
     $html = str_replace('<section class="card" style="text-align:center;color:#17231f"><div class="eyebrow">', '<section class="card" style="text-align:center;color:#17231f"><img class="message-logo" src="assets/povents-logo.png" alt="POVents"><div class="eyebrow">', $html);
+    if (str_contains($html, 'action="?action=login"')) {
+        $html = str_replace('<label for="email">Email address</label><input id="email" name="email" type="email"', '<label for="email">Email or admin username</label><input id="email" name="email" type="text"', $html);
+    }
+    if (($currentUser = user()) && is_admin($currentUser)) {
+        $html = preg_replace('~<span>Event passes</span><strong>.*?</strong>~', '<span>Admin access</span><strong>Unlimited</strong>', $html, 1) ?? $html;
+    }
     $html = str_replace(['assets/app.js?v=5','assets/app.js?v=6'], 'assets/app.js?v=7', $html);
     if (str_contains($html, 'id="guest-link"') && isset($_GET['id'])) {
         $downloadButton = '<p class="event-downloads"><a class="button light" href="?action=download_event_qr&amp;event_id='.(int)$_GET['id'].'">Download branded QR image</a></p>';
@@ -113,7 +119,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         catch (PDOException $e) { flash('error','That email is already registered.'); go('?page=register'); }
     }
     if ($action === 'login') {
-        $s=db()->prepare('SELECT * FROM users WHERE email=?'); $s->execute([strtolower(trim($_POST['email'] ?? ''))]); $u=$s->fetch();
+        $identifier=strtolower(trim($_POST['email'] ?? ''));
+        if ($identifier === 'admin') { $s=db()->query('SELECT * FROM users WHERE is_admin=1 ORDER BY id ASC LIMIT 1'); $u=$s->fetch(); }
+        else { $s=db()->prepare('SELECT * FROM users WHERE email=?'); $s->execute([$identifier]); $u=$s->fetch(); }
         if (!$u || !password_verify($_POST['password'] ?? '', $u['password_hash'])) { flash('error','Email or password is incorrect.'); go('?page=login'); }
         refresh_user((int)$u['id']); go('?page=dashboard');
     }
@@ -132,6 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if ($action === 'subscribe') {
         $u=require_user();
+        if (is_admin($u)) go('?page=dashboard');
         if (local_payment_bypass()) {
             db()->prepare("UPDATE users SET subscription_status='active',event_credits=event_credits+1,subscription_ends_at=DATE_ADD(NOW(),INTERVAL ? DAY) WHERE id=?")->execute([(int)cfg('plan_days'),$u['id']]);
             refresh_user((int)$u['id']);
@@ -166,13 +175,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $startParsed=DateTimeImmutable::createFromFormat('!H:i',$startTime); $endParsed=DateTimeImmutable::createFromFormat('!H:i',$endTime);
         if (!$startParsed || !$endParsed || $startParsed->format('H:i')!==$startTime || $endParsed->format('H:i')!==$endTime || $endTime<=$startTime) { flash('error','Choose valid event times. The end time must be later than the start time.'); go('?page=new-event'); }
         db()->beginTransaction();
-        $credit=db()->prepare("SELECT event_credits FROM users WHERE id=? AND subscription_status='active' AND event_credits>0 AND (subscription_ends_at IS NULL OR subscription_ends_at>NOW()) FOR UPDATE");
-        $credit->execute([$u['id']]);
-        if ($credit->fetchColumn() === false) { db()->rollBack(); go('?page=subscribe'); }
+        if (!is_admin($u)) {
+            $credit=db()->prepare("SELECT event_credits FROM users WHERE id=? AND subscription_status='active' AND event_credits>0 AND (subscription_ends_at IS NULL OR subscription_ends_at>NOW()) FOR UPDATE");
+            $credit->execute([$u['id']]);
+            if ($credit->fetchColumn() === false) { db()->rollBack(); go('?page=subscribe'); }
+        }
         $s=db()->prepare('INSERT INTO events(user_id,title,event_date,start_time,end_time,location,token) VALUES(?,?,?,?,?,?,?)');
         $s->execute([$u['id'],$title,$eventDate,$startTime.':00',$endTime.':00',trim($_POST['location'] ?? ''),bin2hex(random_bytes(16))]);
         $eventId=(int)db()->lastInsertId();
-        db()->prepare("UPDATE users SET subscription_status=IF(event_credits=1,'inactive','active'),event_credits=event_credits-1 WHERE id=?")->execute([$u['id']]);
+        if (!is_admin($u)) db()->prepare("UPDATE users SET subscription_status=IF(event_credits=1,'inactive','active'),event_credits=event_credits-1 WHERE id=?")->execute([$u['id']]);
         db()->commit(); refresh_user((int)$u['id']);
         go('?page=event&id='.$eventId);
     }

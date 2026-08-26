@@ -3,6 +3,7 @@ CREATE TABLE users (
   name VARCHAR(120) NOT NULL,
   email VARCHAR(190) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
+  is_admin TINYINT(1) NOT NULL DEFAULT 0,
   subscription_status ENUM('inactive','active','past_due') NOT NULL DEFAULT 'inactive',
   subscription_ends_at DATETIME NULL,
   event_credits INT UNSIGNED NOT NULL DEFAULT 0,
