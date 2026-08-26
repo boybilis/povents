@@ -119,20 +119,33 @@
 
   async function addWatermark(blob, caption) {
     const bitmap = await createImageBitmap(blob);
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
+    const targetRatio = bitmap.width >= bitmap.height ? 4 / 3 : 3 / 4;
+    const sourceRatio = bitmap.width / bitmap.height;
+    let sourceX = 0;
+    let sourceY = 0;
+    let sourceWidth = bitmap.width;
+    let sourceHeight = bitmap.height;
+    if (sourceRatio > targetRatio) {
+      sourceWidth = bitmap.height * targetRatio;
+      sourceX = (bitmap.width - sourceWidth) / 2;
+    } else if (sourceRatio < targetRatio) {
+      sourceHeight = bitmap.width / targetRatio;
+      sourceY = (bitmap.height - sourceHeight) / 2;
+    }
+    canvas.width = Math.round(sourceWidth);
+    canvas.height = Math.round(sourceHeight);
     const context = canvas.getContext('2d');
-    context.drawImage(bitmap, 0, 0);
-    const fontSize = Math.max(22, Math.min(54, Math.round(bitmap.width * .035)));
+    context.drawImage(bitmap, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
+    const fontSize = Math.max(22, Math.min(54, Math.round(canvas.width * .035)));
     const padding = Math.round(fontSize * .7);
     const text = caption ? `POVents  •  "${caption}"` : 'POVents';
     context.font = `700 ${fontSize}px system-ui, sans-serif`;
     context.textBaseline = 'middle';
     const barHeight = fontSize + padding * 1.5;
     context.fillStyle = 'rgba(4, 12, 9, .64)';
-    context.fillRect(0, bitmap.height - barHeight, bitmap.width, barHeight);
+    context.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
     context.fillStyle = '#ffffff';
-    context.fillText(text, padding, bitmap.height - barHeight / 2, bitmap.width - padding * 2);
+    context.fillText(text, padding, canvas.height - barHeight / 2, canvas.width - padding * 2);
     bitmap.close?.();
     return await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 1));
   }
