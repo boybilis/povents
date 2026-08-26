@@ -2,6 +2,7 @@
 declare(strict_types=1);
 session_start();
 require __DIR__ . '/lib.php';
+ob_start(static fn(string $html): string => str_replace('</head>', '<link rel="stylesheet" href="assets/responsive.css?v=1"></head>', $html));
 
 $page = $_GET['page'] ?? 'home';
 $action = $_GET['action'] ?? '';
