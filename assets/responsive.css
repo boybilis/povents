@@ -41,6 +41,7 @@ button,.button,input{min-height:44px}
 .watermark-preview span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .message-logo{display:block;width:min(220px,65%);height:auto;margin:0 auto 28px}
 .footer-logo{display:inline-block;width:120px;height:auto;vertical-align:middle;margin-right:12px}
+.event-downloads{display:flex;flex-wrap:wrap;gap:8px}
 
 @media (max-width:760px){
   .shell{width:calc(100% - 24px)}

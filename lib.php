@@ -89,6 +89,37 @@ function download_event_qr(array $event, string $guestUrl): never {
     echo $svg; exit;
 }
 
+function download_photo_album(array $event): never {
+    $s = db()->prepare('SELECT file_name,mime_type,created_at FROM photos WHERE event_id=? AND expires_at>NOW() ORDER BY created_at ASC');
+    $s->execute([$event['id']]);
+    $photos = array_values(array_filter($s->fetchAll(), static fn(array $photo): bool => is_file(__DIR__.'/uploads/'.$event['id'].'/'.basename($photo['file_name']))));
+    if (!$photos) { flash('error', 'This event does not have any available photos yet.'); go('?page=event&id='.$event['id']); }
+    $safeTitle = e((string)$event['title']);
+    $date = $event['event_date'] ? date('F j, Y', strtotime((string)$event['event_date'])) : '';
+    $fileName = preg_replace('/[^A-Za-z0-9_-]+/', '-', trim((string)$event['title'])).'-offline-album.html';
+    if (ob_get_level()) ob_end_clean();
+    set_time_limit(0);
+    header('Content-Type: text/html; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="'.$fileName.'"');
+    header('Cache-Control: private, no-store');
+    echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>'.$safeTitle.' · Offline photo album</title><style>';
+    echo '*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:#151916;color:#eef2ef;font-family:Arial,sans-serif;overflow:hidden}.album{height:100%;display:grid;grid-template-rows:1fr auto;gap:14px;padding:18px}.book{position:relative;min-height:0;perspective:1800px}.page{position:absolute;inset:0;display:none;background:#f7f1e4;color:#17231f;border-radius:8px 24px 24px 8px;padding:clamp(14px,3vw,38px);box-shadow:0 22px 70px #0009,inset 18px 0 28px #8d806522;transform-origin:left center;overflow:hidden}.page.active{display:grid;animation:turnIn .55s ease both}.page.reverse{transform-origin:right center;animation:turnBack .55s ease both}@keyframes turnIn{from{opacity:.25;transform:rotateY(-72deg) scale(.96)}to{opacity:1;transform:none}}@keyframes turnBack{from{opacity:.25;transform:rotateY(72deg) scale(.96)}to{opacity:1;transform:none}}.cover{place-items:center;text-align:center;background:linear-gradient(145deg,#113f31,#071c16);color:#fff;border:10px solid #245b45}.cover img{width:min(420px,70%);filter:drop-shadow(0 4px 8px #0008)}.cover h1{font-family:Georgia,serif;font-size:clamp(40px,8vw,90px);margin:20px 0 8px}.cover p{color:#cbd8d2}.grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:clamp(8px,2vw,20px);height:100%}.photo{margin:0;min-height:0;background:#ddd2bd;padding:clamp(6px,1vw,12px);box-shadow:0 6px 18px #594b3630;transform:rotate(var(--tilt))}.photo img{width:100%;height:100%;display:block;object-fit:cover;background:#d7d7d7}.controls{display:flex;align-items:center;justify-content:center;gap:12px}.controls button{border:0;border-radius:999px;padding:12px 18px;background:#dff25f;color:#10251d;font:700 15px Arial;cursor:pointer}.controls button:disabled{opacity:.35}.count{min-width:95px;text-align:center;color:#bec8c2;font-size:14px}.hint{text-align:center;color:#8f9b95;font-size:12px}@media(max-width:600px){.album{padding:10px}.page{border-radius:6px 16px 16px 6px}.grid{gap:8px}.photo{padding:5px}}@media(orientation:landscape){.book{width:min(86vh,900px);justify-self:center;aspect-ratio:4/3}.album{grid-template-rows:minmax(0,1fr) auto}}</style></head><body><main class="album"><section class="book" id="book">';
+    echo '<article class="page cover active"><div><img src="data:image/png;base64,'.base64_encode((string)file_get_contents(__DIR__.'/assets/povents-logo-dark.png')).'" alt="POVents"><h1>'.$safeTitle.'</h1><p>'.e($date).'</p><p>'.count($photos).' memories · available offline</p></div></article>';
+    foreach (array_chunk($photos, 4) as $pageIndex => $pagePhotos) {
+        echo '<article class="page"><div class="grid">';
+        foreach ($pagePhotos as $photoIndex => $photo) {
+            $path = __DIR__.'/uploads/'.$event['id'].'/'.basename($photo['file_name']);
+            $mime = in_array($photo['mime_type'], ['image/jpeg','image/png','image/webp'], true) ? $photo['mime_type'] : 'image/jpeg';
+            $tilt = (($pageIndex * 4 + $photoIndex) % 2 === 0) ? '-0.5deg' : '0.5deg';
+            echo '<figure class="photo" style="--tilt:'.$tilt.'"><img src="data:'.$mime.';base64,'.base64_encode((string)file_get_contents($path)).'" alt="Event photo"></figure>';
+            if (function_exists('ob_flush')) @ob_flush(); flush();
+        }
+        echo '</div></article>';
+    }
+    echo '</section><footer><div class="controls"><button id="prev" type="button">← Previous</button><span class="count" id="count"></span><button id="next" type="button">Next →</button></div><p class="hint">Swipe or use the arrow keys to turn pages · Photos are stored inside this file</p></footer></main><script>(()=>{const p=[...document.querySelectorAll(".page")],prev=document.querySelector("#prev"),next=document.querySelector("#next"),count=document.querySelector("#count");let i=0,startX=0;function show(n,reverse=false){i=Math.max(0,Math.min(p.length-1,n));p.forEach((el,x)=>{el.classList.toggle("active",x===i);el.classList.toggle("reverse",x===i&&reverse)});prev.disabled=i===0;next.disabled=i===p.length-1;count.textContent=`${i+1} / ${p.length}`}prev.onclick=()=>show(i-1,true);next.onclick=()=>show(i+1);addEventListener("keydown",e=>{if(e.key==="ArrowLeft")show(i-1,true);if(e.key==="ArrowRight")show(i+1)});document.querySelector("#book").addEventListener("touchstart",e=>startX=e.touches[0].clientX,{passive:true});document.querySelector("#book").addEventListener("touchend",e=>{const d=e.changedTouches[0].clientX-startX;if(Math.abs(d)>45)show(i+(d<0?1:-1),d>0)},{passive:true});show(0)})();</script></body></html>';
+    exit;
+}
+
 function paymongo(string $method, string $path, ?array $body = null): array {
     $ch = curl_init('https://api.paymongo.com/v1/' . ltrim($path, '/'));
     curl_setopt_array($ch, [
