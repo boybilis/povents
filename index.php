@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $s->execute([$sessionId, $event['id']]); $captureSession = $s->fetch();
             if (!$captureSession || (int)$captureSession['photo_count'] >= (int)cfg('max_photos_per_session')) throw new RuntimeException('You have reached the 5-photo limit for this scan.');
             if (!isset($_FILES['photo']) || $_FILES['photo']['error'] !== UPLOAD_ERR_OK) throw new RuntimeException('The photo could not be uploaded.');
-            if ($_FILES['photo']['size'] > cfg('max_upload_bytes')) throw new RuntimeException('That photo is too large.');
+            if ($_FILES['photo']['size'] > cfg('max_upload_bytes')) throw new RuntimeException('That photo exceeds the 1.5 MB limit.');
             $info = new finfo(FILEINFO_MIME_TYPE); $mime = $info->file($_FILES['photo']['tmp_name']);
             if (!in_array($mime, ['image/jpeg','image/png','image/webp'], true)) throw new RuntimeException('Only camera images are accepted.');
             $ext = ['image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp'][$mime];

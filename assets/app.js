@@ -25,6 +25,7 @@
   let imageCapture = null;
   let remaining = Number(camera.dataset.remaining || 5);
   let nativeCapture = false;
+  const maxPhotoBytes = 1536 * 1024;
 
   const setStatus = (message, error = false) => {
     status.textContent = message;
@@ -67,8 +68,35 @@
     }
   }
 
+  async function fitAtFullQuality(blob) {
+    if (blob.size <= maxPhotoBytes) return blob;
+    const bitmap = await createImageBitmap(blob);
+    let width = bitmap.width;
+    let height = bitmap.height;
+    let result = blob;
+    for (let attempt = 0; attempt < 8 && result.size > maxPhotoBytes; attempt++) {
+      const ratio = attempt === 0 ? Math.min(1, 2400 / Math.max(width, height)) : Math.min(.9, Math.sqrt(maxPhotoBytes / result.size) * .94);
+      width = Math.max(640, Math.round(width * ratio));
+      height = Math.max(480, Math.round(height * ratio));
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, width, height);
+      result = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 1));
+    }
+    bitmap.close?.();
+    return result;
+  }
+
   async function upload(blob) {
     capture.disabled = true;
+    try {
+      blob = await fitAtFullQuality(blob);
+      if (blob.size > maxPhotoBytes) throw new Error('This photo could not be fitted within the 1.5 MB limit.');
+    } catch (error) {
+      setStatus(error.message || 'Could not prepare this photo.', true);
+      capture.disabled = false;
+      return;
+    }
     const form = new FormData();
     form.append('photo', blob, 'moment.jpg');
     form.append('token', token);
@@ -114,14 +142,14 @@
     if (imageCapture) {
       try {
         const fullResolution = await imageCapture.takePhoto();
-        if (fullResolution.size <= 7.5 * 1024 * 1024) blob = fullResolution;
+        blob = fullResolution;
       } catch (_) {}
     }
     if (!blob) {
       canvas.width = Math.min(video.videoWidth, 2400);
       canvas.height = Math.round(canvas.width * video.videoHeight / video.videoWidth);
       canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-      blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .9));
+      blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 1));
     }
     await upload(blob);
   });

@@ -19,5 +19,5 @@ return [
     'photo_retention_days' => 7,
     'cron_secret' => 'replace-with-a-long-random-string',
     'max_photos_per_session' => 5,
-    'max_upload_bytes' => 8 * 1024 * 1024,
+    'max_upload_bytes' => 1536 * 1024,
 ];
