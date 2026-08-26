@@ -26,7 +26,7 @@ ob_start(static function (string $html): string {
     $html = str_replace(['assets/style.css"','assets/style.css?v=4"'], 'assets/style.css?v=5"', $html);
     if (str_contains($html, 'id="guest-link"') && isset($_GET['id'])) {
         $eventId = (int)$_GET['id'];
-        $downloadButton = '<p class="event-downloads"><a class="button light" href="?action=download_event_qr&amp;event_id='.$eventId.'">Download branded QR image</a></p>';
+        $downloadButton = '<p class="event-downloads"><button class="button light presentation-qr-create" type="button" data-event-id="'.$eventId.'">Create Presentation QR</button></p>';
         $html = preg_replace('~(<div class="copyline">.*?</div>)~s', '$1'.$downloadButton, $html, 1) ?? $html;
         if (is_file(album_storage_path($eventId)) && !str_contains($html, 'class="gallery"')) {
             $archivedAlbum = '<section class="card archived-album"><div><div class="eyebrow">Saved event album</div><h2>Photo album archive</h2><p class="muted">The original event photos have expired. Your last generated offline album remains available.</p></div><div class="actions"><a class="button" href="?action=download_photo_album&amp;event_id='.$eventId.'">Download photo album</a><button class="button light album-share" type="button" data-event-id="'.$eventId.'">Copy shareable album link</button></div></section>';
@@ -35,7 +35,7 @@ ob_start(static function (string $html): string {
     }
     return str_replace(
         ['</head>','</body>'],
-        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=14"><link rel="stylesheet" href="assets/hero.css?v=1"></head>','<script src="assets/gallery.js?v=11"></script></body>'],
+        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=15"><link rel="stylesheet" href="assets/hero.css?v=1"></head>','<script src="assets/gallery.js?v=11"></script><script src="assets/presentation-qr.js?v=1"></script></body>'],
         $html
     );
 });
@@ -47,7 +47,13 @@ if ($action === 'download_event_qr') {
     $u = require_user();
     $event = event_for_owner((int)($_GET['event_id'] ?? 0), (int)$u['id']);
     if (!$event) { http_response_code(404); exit('Event not found.'); }
-    download_event_qr($event, url('?page=capture&token='.$event['token']));
+    $backgroundDataUri = null;
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        check_csrf();
+        try { $backgroundDataUri = presentation_background_upload_data_uri($_FILES['qr_background'] ?? []); }
+        catch (Throwable $e) { http_response_code(400); exit($e->getMessage()); }
+    }
+    download_event_qr($event, url('?page=capture&token='.$event['token']), $backgroundDataUri);
 }
 if ($action === 'download_photo_album') {
     $u = require_user();

@@ -102,7 +102,7 @@ function send_registration_otp(string $name, string $email, string $otp): void {
     }
 }
 
-function download_event_qr(array $event, string $guestUrl): never {
+function download_event_qr(array $event, string $guestUrl, ?string $backgroundDataUri = null): never {
     $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=900x900&margin=18&data='.rawurlencode($guestUrl);
     $ch = curl_init($qrUrl);
     curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>20,CURLOPT_FOLLOWLOCATION=>true,CURLOPT_USERAGENT=>'POVents QR Generator']);
@@ -112,20 +112,47 @@ function download_event_qr(array $event, string $guestUrl): never {
     $title = e((string)$event['title']);
     $date = date('F j, Y', strtotime((string)$event['event_date']));
     $times = date('g:i A', strtotime((string)$event['start_time'])).' - '.date('g:i A', strtotime((string)$event['end_time']));
-    $titleSize = max(34, min(58, (int)floor(900 / max(1, strlen((string)$event['title'])) * 1.7)));
-    $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1500" viewBox="0 0 1200 1500">'
-        .'<rect width="1200" height="1500" rx="42" fill="#fffdf8"/>'
-        .'<image href="data:image/png;base64,'.base64_encode($logoBytes).'" x="290" y="45" width="620" height="224" preserveAspectRatio="xMidYMid meet"/>'
-        .'<rect x="126" y="276" width="948" height="948" rx="32" fill="#fff" stroke="#d9ddd4" stroke-width="4"/>'
-        .'<image href="data:image/png;base64,'.base64_encode($qrBytes).'" x="150" y="300" width="900" height="900"/>'
-        .'<text x="600" y="1305" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="'.$titleSize.'" font-weight="700" fill="#072a20">'.$title.'</text>'
-        .'<text x="600" y="1375" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="28" fill="#63706b">'.e($date.'  |  '.$times).'</text>'
-        .'<text x="600" y="1440" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="22" fill="#63706b">Scan to share your point of view</text>'
+    $titleSize = max(54, min(92, (int)floor(1050 / max(1, strlen((string)$event['title'])) * 2.2)));
+    $background = $backgroundDataUri
+        ? '<image href="'.$backgroundDataUri.'" x="0" y="0" width="1920" height="1080" preserveAspectRatio="xMidYMid slice"/><rect width="1920" height="1080" fill="#031c15" opacity=".68"/>'
+        : '<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#062d22"/><stop offset="1" stop-color="#009b57"/></linearGradient></defs><rect width="1920" height="1080" fill="url(#bg)"/>';
+    $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">'
+        .$background
+        .'<image href="data:image/png;base64,'.base64_encode($logoBytes).'" x="110" y="65" width="520" height="185" preserveAspectRatio="xMinYMid meet"/>'
+        .'<text x="110" y="410" font-family="Arial,Helvetica,sans-serif" font-size="'.$titleSize.'" font-weight="800" fill="#ffffff">'.$title.'</text>'
+        .'<text x="112" y="500" font-family="Arial,Helvetica,sans-serif" font-size="38" font-weight="600" fill="#ffffff">'.e($date).'</text>'
+        .'<text x="112" y="558" font-family="Arial,Helvetica,sans-serif" font-size="32" fill="#d9f5e7">'.e($times).'</text>'
+        .'<text x="112" y="730" font-family="Arial,Helvetica,sans-serif" font-size="52" font-weight="700" fill="#ffffff">Scan. Capture. Share.</text>'
+        .'<text x="112" y="790" font-family="Arial,Helvetica,sans-serif" font-size="29" fill="#d9f5e7">Share your point of view in up to five photos.</text>'
+        .'<rect x="1190" y="120" width="620" height="790" rx="38" fill="#fffdf8"/>'
+        .'<image href="data:image/png;base64,'.base64_encode($qrBytes).'" x="1260" y="180" width="480" height="480"/>'
+        .'<text x="1500" y="745" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="40" font-weight="800" fill="#072a20">SCAN TO OPEN CAMERA</text>'
+        .'<text x="1500" y="805" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="25" fill="#63706b">No app or guest account needed</text>'
+        .'<rect x="1270" y="850" width="460" height="7" rx="4" fill="#00a861"/>'
         .'</svg>';
-    $fileName = preg_replace('/[^A-Za-z0-9_-]+/', '-', trim((string)$event['title'])).'-QR.svg';
+    $fileName = preg_replace('/[^A-Za-z0-9_-]+/', '-', trim((string)$event['title'])).'-presentation-QR.svg';
     if (ob_get_level()) ob_end_clean();
     header('Content-Type: image/svg+xml; charset=UTF-8'); header('Content-Disposition: attachment; filename="'.$fileName.'"'); header('Cache-Control: private, no-store');
     echo $svg; exit;
+}
+
+function presentation_background_upload_data_uri(array $file): ?string {
+    $error = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($error === UPLOAD_ERR_NO_FILE) return null;
+    if ($error !== UPLOAD_ERR_OK || empty($file['tmp_name'])) throw new RuntimeException('The presentation background could not be uploaded.');
+    if (!extension_loaded('gd')) throw new RuntimeException('Presentation background processing is not enabled on this server.');
+    if ((int)($file['size'] ?? 0) > 8 * 1024 * 1024) throw new RuntimeException('The presentation background must be 8 MB or smaller.');
+    $mime = (new finfo(FILEINFO_MIME_TYPE))->file((string)$file['tmp_name']);
+    if (!in_array($mime, ['image/jpeg','image/png','image/webp'], true)) throw new RuntimeException('Use a JPG, PNG, or WebP presentation background.');
+    $bytes = @file_get_contents((string)$file['tmp_name']); $source = is_string($bytes) ? @imagecreatefromstring($bytes) : false;
+    if (!$source) throw new RuntimeException('The presentation background could not be processed.');
+    $sw = imagesx($source); $sh = imagesy($source); $tw = 1920; $th = 1080; $targetRatio = $tw / $th; $sourceRatio = $sw / $sh;
+    $sx = 0; $sy = 0; $cw = $sw; $ch = $sh;
+    if ($sourceRatio > $targetRatio) { $cw = (int)round($sh * $targetRatio); $sx = (int)(($sw - $cw) / 2); }
+    elseif ($sourceRatio < $targetRatio) { $ch = (int)round($sw / $targetRatio); $sy = (int)(($sh - $ch) / 2); }
+    $resized = imagecreatetruecolor($tw, $th); imagecopyresampled($resized, $source, 0, 0, $sx, $sy, $tw, $th, $cw, $ch);
+    ob_start(); imagejpeg($resized, null, 84); $jpeg = (string)ob_get_clean(); imagedestroy($source); imagedestroy($resized);
+    return 'data:image/jpeg;base64,'.base64_encode($jpeg);
 }
 
 function shared_album_signature(array $event, int $expires): string {
