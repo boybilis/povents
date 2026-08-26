@@ -23,6 +23,7 @@ ob_start(static function (string $html): string {
         $html = preg_replace('~<strong>7-day storage:</strong> The earliest photos expire (.*?)\. Download originals before they are permanently erased\.~', $albumNotice, $html, 1) ?? $html;
     }
     $html = str_replace(['assets/app.js?v=4','assets/app.js?v=5','assets/app.js?v=6','assets/app.js?v=7'], 'assets/app.js?v=8', $html);
+    $html = str_replace(['assets/style.css"','assets/style.css?v=4"'], 'assets/style.css?v=5"', $html);
     if (str_contains($html, 'id="guest-link"') && isset($_GET['id'])) {
         $eventId = (int)$_GET['id'];
         $downloadButton = '<p class="event-downloads"><a class="button light" href="?action=download_event_qr&amp;event_id='.$eventId.'">Download branded QR image</a></p>';
@@ -34,7 +35,7 @@ ob_start(static function (string $html): string {
     }
     return str_replace(
         ['</head>','</body>'],
-        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=14"></head>','<script src="assets/gallery.js?v=11"></script></body>'],
+        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=14"><link rel="stylesheet" href="assets/hero.css?v=1"></head>','<script src="assets/gallery.js?v=11"></script></body>'],
         $html
     );
 });

@@ -1,0 +1,14 @@
+.photo-stack::before,
+.photo-stack::after {
+    background-position: center;
+    background-size: cover;
+    background-repeat: no-repeat;
+}
+
+.photo-stack::before {
+    background-image: url("hero-wedding.png?v=1");
+}
+
+.photo-stack::after {
+    background-image: url("hero-birthday.png?v=1");
+}
