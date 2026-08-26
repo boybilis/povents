@@ -18,6 +18,10 @@ ob_start(static function (string $html): string {
         $html = preg_replace('~<span>Event passes</span><strong>.*?</strong>~', '<span>Admin access</span><strong>Unlimited</strong>', $html, 1) ?? $html;
     }
     $html = str_replace(['Your Creator plan activates automatically','Check my plan'], ['Your event pass is added automatically','Check my event passes'], $html);
+    if (isset($_GET['id'])) {
+        $albumNotice = '<strong>Save your photo album:</strong> The earliest photos expire $1 and will be permanently erased. Download the photo album at least once before this deadline so a saved album remains available after the original images are deleted. <a href="?action=download_photo_album&amp;event_id='.(int)$_GET['id'].'"><strong>Download photo album now</strong></a>';
+        $html = preg_replace('~<strong>7-day storage:</strong> The earliest photos expire (.*?)\. Download originals before they are permanently erased\.~', $albumNotice, $html, 1) ?? $html;
+    }
     $html = str_replace(['assets/app.js?v=5','assets/app.js?v=6'], 'assets/app.js?v=7', $html);
     if (str_contains($html, 'id="guest-link"') && isset($_GET['id'])) {
         $eventId = (int)$_GET['id'];
