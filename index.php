@@ -10,6 +10,7 @@ ob_start(static function (string $html): string {
     if (str_contains($html, 'action="?action=login"')) {
         $html = str_replace('<label for="email">Email address</label><input id="email" name="email" type="email"', '<label for="email">Email or admin username</label><input id="email" name="email" type="text"', $html);
     }
+    if (str_contains($html, 'action="?action=register"')) $html = str_replace('>Continue to plan</button>', '>Send verification code</button>', $html);
     if (($currentUser = user()) && is_admin($currentUser)) {
         $html = preg_replace('~<span>Event passes</span><strong>.*?</strong>~', '<span>Admin access</span><strong>Unlimited</strong>', $html, 1) ?? $html;
     }
@@ -115,8 +116,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'register') {
         $name = trim($_POST['name'] ?? ''); $email = strtolower(trim($_POST['email'] ?? '')); $password = $_POST['password'] ?? '';
         if (strlen($name) < 2 || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($password) < 8) { flash('error','Use a valid name, email, and a password of at least 8 characters.'); go('?page=register'); }
-        try { $s=db()->prepare('INSERT INTO users(name,email,password_hash) VALUES(?,?,?)'); $s->execute([$name,$email,password_hash($password,PASSWORD_DEFAULT)]); refresh_user((int)db()->lastInsertId()); go('?page=subscribe'); }
-        catch (PDOException $e) { flash('error','That email is already registered.'); go('?page=register'); }
+        $s=db()->prepare('SELECT id FROM users WHERE email=?'); $s->execute([$email]);
+        if ($s->fetchColumn()) { flash('error','That email is already registered.'); go('?page=register'); }
+        $otp=(string)random_int(100000,999999);
+        try { send_registration_otp($name,$email,$otp); }
+        catch(Throwable $e) { unset($_SESSION['pending_registration']); flash('error',$e->getMessage()); go('?page=register'); }
+        $_SESSION['pending_registration']=['name'=>$name,'email'=>$email,'password_hash'=>password_hash($password,PASSWORD_DEFAULT),'otp_hash'=>password_hash($otp,PASSWORD_DEFAULT),'expires_at'=>time()+600,'attempts'=>0,'last_sent_at'=>time()];
+        go('?page=verify-registration');
+    }
+    if ($action === 'verify_registration') {
+        $pending=$_SESSION['pending_registration']??null; $otp=preg_replace('/\D/','',$_POST['otp']??'');
+        if (!$pending || (int)$pending['expires_at']<time()) { unset($_SESSION['pending_registration']); flash('error','Your verification code expired. Please register again.'); go('?page=register'); }
+        $pending['attempts']=(int)$pending['attempts']+1; $_SESSION['pending_registration']=$pending;
+        if ($pending['attempts']>5) { unset($_SESSION['pending_registration']); flash('error','Too many incorrect attempts. Please register again.'); go('?page=register'); }
+        if (strlen($otp)!==6 || !password_verify($otp,$pending['otp_hash'])) { flash('error','That verification code is incorrect.'); go('?page=verify-registration'); }
+        try {
+            $s=db()->prepare('INSERT INTO users(name,email,password_hash) VALUES(?,?,?)'); $s->execute([$pending['name'],$pending['email'],$pending['password_hash']]);
+            $userId=(int)db()->lastInsertId(); unset($_SESSION['pending_registration']); session_regenerate_id(true); refresh_user($userId); go('?page=subscribe');
+        } catch(PDOException $e) { unset($_SESSION['pending_registration']); flash('error','That email is already registered.'); go('?page=login'); }
+    }
+    if ($action === 'resend_registration_otp') {
+        $pending=$_SESSION['pending_registration']??null;
+        if (!$pending || (int)$pending['expires_at']<time()) { unset($_SESSION['pending_registration']); flash('error','Your registration session expired. Please start again.'); go('?page=register'); }
+        if (time()-(int)$pending['last_sent_at']<60) { flash('error','Please wait one minute before requesting another code.'); go('?page=verify-registration'); }
+        $otp=(string)random_int(100000,999999);
+        try { send_registration_otp($pending['name'],$pending['email'],$otp); }
+        catch(Throwable $e) { flash('error',$e->getMessage()); go('?page=verify-registration'); }
+        $pending['otp_hash']=password_hash($otp,PASSWORD_DEFAULT); $pending['expires_at']=time()+600; $pending['attempts']=0; $pending['last_sent_at']=time(); $_SESSION['pending_registration']=$pending;
+        flash('success','A new verification code was sent.'); go('?page=verify-registration');
     }
     if ($action === 'login') {
         $identifier=strtolower(trim($_POST['email'] ?? ''));
@@ -231,6 +258,14 @@ if ($page === 'capture') {
 
 function header_html(string $title='POVents'): void { $u=user(); $f=pull_flash(); ?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="<?=csrf()?>"><title><?=e($title)?> · POVents</title><meta name="description" content="Collect every guest's point of view through one event QR code."><link rel="stylesheet" href="assets/style.css"></head><body><header class="shell nav"><a class="brand" href="?"><i></i>POVents</a><nav class="navlinks"><?php if($u): ?><a href="?page=dashboard">My events</a><form method="post" action="?action=logout"><input type="hidden" name="csrf" value="<?=csrf()?>"><button class="button light">Log out</button></form><?php else: ?><a href="?page=login">Log in</a><a class="button" href="?page=register">Start creating</a><?php endif; ?></nav></header><?php if($f): ?><div class="shell alert <?=e($f['type'])?>"><?=e($f['message'])?></div><?php endif; }
 function footer_html(): void { ?><footer class="shell section muted">POVents — every angle tells the story.</footer></body></html><?php }
+
+if ($page === 'verify-registration') {
+    $pending=$_SESSION['pending_registration']??null;
+    if (!$pending || (int)($pending['expires_at']??0)<time()) { unset($_SESSION['pending_registration']); flash('error','Your registration session expired. Please start again.'); go('?page=register'); }
+    header_html('Verify your email'); ?>
+    <main class="shell auth-wrap"><section class="card auth"><div class="eyebrow">Check your inbox</div><h1>Verify your email</h1><p class="lead">We sent a six-digit code to <strong><?=e($pending['email'])?></strong>. It expires in 10 minutes.</p><form method="post" action="?action=verify_registration"><div class="field"><label for="otp">Verification code</label><input id="otp" name="otp" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="000000" required style="font-size:28px;letter-spacing:8px;text-align:center"></div><input type="hidden" name="csrf" value="<?=csrf()?>"><button class="full" type="submit">Verify and create account</button></form><form method="post" action="?action=resend_registration_otp" style="margin-top:10px"><input type="hidden" name="csrf" value="<?=csrf()?>"><button class="button light full" type="submit">Resend code</button></form><p class="muted" style="font-size:13px">Didn't request this account? You can safely close this page.</p></section></main>
+    <?php footer_html(); exit;
+}
 
 purge_expired_photos();
 header_html(ucfirst(str_replace('-',' ',$page)));

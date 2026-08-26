@@ -12,6 +12,15 @@ return [
     ],
     'paymongo_secret_key' => 'sk_test_replace_me',
     'paymongo_webhook_secret' => 'whsk_replace_me',
+    'smtp' => [
+        'host' => 'smtp.hostinger.com',
+        'port' => 587,
+        'encryption' => 'tls',
+        'username' => 'no-reply@your-domain.com',
+        'password' => 'replace-with-mailbox-password',
+        'from_email' => 'no-reply@your-domain.com',
+        'from_name' => 'POVents',
+    ],
     // Keep false on Hostinger. This is only for local development.
     'local_payment_bypass' => false,
     'plan_price_centavos' => 69900,
