@@ -157,7 +157,7 @@ function serve_saved_photo_album(array $event, string $path): never {
     exit;
 }
 
-function download_photo_album(array $event, bool $shared = false): never {
+function download_photo_album(array $event, bool $shared = false, ?string $coverDataUri = null): never {
     $s = db()->prepare('SELECT file_name,mime_type,created_at FROM photos WHERE event_id=? AND expires_at>NOW() ORDER BY created_at ASC');
     $s->execute([$event['id']]);
     $photos = array_values(array_filter($s->fetchAll(), static fn(array $photo): bool => is_file(__DIR__.'/uploads/'.$event['id'].'/'.basename($photo['file_name']))));
@@ -183,6 +183,7 @@ function download_photo_album(array $event, bool $shared = false): never {
     }
     $safeTitle = e((string)$event['title']);
     $date = $event['event_date'] ? date('F j, Y', strtotime((string)$event['event_date'])) : '';
+    $coverStyle = $coverDataUri ? ' style="background-image:linear-gradient(#071c1688,#071c16b8),url('.$coverDataUri.');background-size:cover;background-position:center"' : '';
     if (ob_get_level()) ob_end_clean();
     set_time_limit(0);
     ob_start();
@@ -191,7 +192,7 @@ function download_photo_album(array $event, bool $shared = false): never {
     echo '<style>.album{display:block;width:100vw;height:100vh;height:100dvh;padding:0}.book{width:100%;height:100%;min-height:100%;}.page{border-radius:0;padding-bottom:110px}.album>footer{position:fixed;z-index:20;left:0;right:0;bottom:0;padding:26px 12px 10px;background:linear-gradient(transparent,#101512 42%);pointer-events:none}.controls,.hint{pointer-events:auto}.controls{flex-wrap:wrap}.controls button{padding:10px 15px}@media(max-width:600px){.album{padding:0}.page{border-radius:0;padding:10px 10px 115px}.cover{padding-bottom:115px}}@media(orientation:landscape){.book{width:100%;height:100%;aspect-ratio:auto}.album{display:block}}</style>';
     echo '<style>.page{border:0;box-shadow:none}.cover{border:0}.page:not(.cover){grid-template-rows:auto minmax(0,1fr)}.album-page-header{display:flex;align-items:center;justify-content:space-between;gap:24px;height:58px;padding:0 4px 10px}.album-page-logo{display:block;width:155px;height:48px;background:url("data:image/png;base64,'.base64_encode((string)file_get_contents(__DIR__.'/assets/povents-logo.png')).'") left center/contain no-repeat;flex:0 0 auto}.album-page-header strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;font-family:Georgia,serif;font-size:clamp(20px,2.4vw,34px);font-weight:600}.grid{width:100%;height:100%;min-width:0;min-height:0;overflow:hidden}.photo{display:flex;align-items:center;justify-content:center;min-width:0;min-height:0;overflow:hidden;padding:0;background:transparent;box-shadow:none;transform:none}.photo img{width:auto;height:auto;max-width:100%;max-height:100%;object-fit:contain;border:3px solid #fff;border-radius:8px;background:transparent}.portrait-page .grid{grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:minmax(0,1fr);gap:10px}.landscape-page .grid{grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:minmax(0,1fr);gap:10px}@media(max-width:700px){.album-page-header{height:46px}.album-page-logo{width:115px;height:36px}.album-page-header strong{font-size:18px}}</style>';
     echo '<style>.book{perspective:2400px;transform-style:preserve-3d;isolation:isolate}.page{backface-visibility:hidden;transform-style:preserve-3d}.page.active{display:grid;animation:none}.page.turn-under,.page.flip-forward,.page.flip-back-in{display:grid}.page.turn-under{z-index:1}.page.flip-forward{z-index:3;transform-origin:left center;animation:realPageForward .9s cubic-bezier(.45,.05,.2,1) both}.page.flip-back-in{z-index:3;transform-origin:left center;animation:realPageBack .9s cubic-bezier(.25,.72,.2,1) both}.page.flip-forward:after,.page.flip-back-in:after{content:"";position:absolute;z-index:30;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(0,0,0,.28),rgba(255,255,255,.14) 12%,transparent 38%,rgba(0,0,0,.12));animation:pageFoldShade .9s ease both}.page.flip-forward:before,.page.flip-back-in:before{content:"";position:absolute;z-index:31;top:0;bottom:0;left:0;width:12px;pointer-events:none;background:linear-gradient(90deg,#0006,#fff5,transparent)}@keyframes realPageForward{0%{transform:rotateY(0) translateZ(1px);filter:brightness(1);box-shadow:0 16px 50px #0007}45%{transform:rotateY(-48deg) translateX(-1.2%) skewY(.8deg);filter:brightness(.94);box-shadow:28px 12px 55px #0009}75%{transform:rotateY(-82deg) translateX(-2.2%) skewY(1.3deg);filter:brightness(.78);box-shadow:44px 8px 60px #000b}100%{transform:rotateY(-104deg) translateX(-3%);filter:brightness(.62);box-shadow:55px 4px 65px #000b}}@keyframes realPageBack{0%{transform:rotateY(-104deg) translateX(-3%);filter:brightness(.62);box-shadow:55px 4px 65px #000b}28%{transform:rotateY(-80deg) translateX(-2.2%) skewY(1.2deg);filter:brightness(.78);box-shadow:44px 8px 60px #000b}62%{transform:rotateY(-42deg) translateX(-1%) skewY(.6deg);filter:brightness(.95);box-shadow:25px 12px 52px #0009}100%{transform:rotateY(0) translateZ(1px);filter:brightness(1);box-shadow:0 16px 50px #0007}}@keyframes pageFoldShade{0%,100%{opacity:0}35%,72%{opacity:1}}@media(prefers-reduced-motion:reduce){.page.flip-forward,.page.flip-back-in{animation-duration:.01ms}.page.flip-forward:after,.page.flip-back-in:after{animation-duration:.01ms}}</style>';
-    echo '<article class="page cover active"><div><img src="data:image/png;base64,'.base64_encode((string)file_get_contents(__DIR__.'/assets/povents-logo-dark.png')).'" alt="POVents"><h1>'.$safeTitle.'</h1><p>'.e($date).'</p><p>'.count($photos).' memories · available offline</p></div></article>';
+    echo '<article class="page cover active"'.$coverStyle.'><div><img src="data:image/png;base64,'.base64_encode((string)file_get_contents(__DIR__.'/assets/povents-logo-dark.png')).'" alt="POVents"><h1>'.$safeTitle.'</h1><p>'.e($date).'</p><p>'.count($photos).' memories · available offline</p></div></article>';
     foreach ($albumPages as $pageIndex => $albumPage) {
         $pagePhotos = $albumPage['photos'];
         echo '<article class="page '.$albumPage['orientation'].'-page"><header class="album-page-header"><span class="album-page-logo" role="img" aria-label="POVents"></span><strong>'.$safeTitle.'</strong></header><div class="grid">';
@@ -227,6 +228,26 @@ function album_photo_data_uri(string $path): string {
     imagecopyresampled($resized, $source, 0, 0, $sourceX, $sourceY, $targetWidth, $targetHeight, $cropWidth, $cropHeight);
     ob_start(); imagejpeg($resized, null, 76); $jpeg = (string)ob_get_clean();
     imagedestroy($source); imagedestroy($resized);
+    return 'data:image/jpeg;base64,'.base64_encode($jpeg);
+}
+
+function album_cover_upload_data_uri(array $file): ?string {
+    $error=(int)($file['error']??UPLOAD_ERR_NO_FILE);
+    if($error===UPLOAD_ERR_NO_FILE)return null;
+    if($error!==UPLOAD_ERR_OK||empty($file['tmp_name']))throw new RuntimeException('The album cover could not be uploaded.');
+    if(!extension_loaded('gd'))throw new RuntimeException('Album cover processing is not enabled on this server.');
+    if((int)($file['size']??0)>5*1024*1024)throw new RuntimeException('The album cover must be 5 MB or smaller.');
+    $mime=(new finfo(FILEINFO_MIME_TYPE))->file((string)$file['tmp_name']);
+    if(!in_array($mime,['image/jpeg','image/png','image/webp'],true))throw new RuntimeException('Use a JPG, PNG, or WebP image for the album cover.');
+    $bytes=@file_get_contents((string)$file['tmp_name']);$source=is_string($bytes)?@imagecreatefromstring($bytes):false;
+    if(!$source)throw new RuntimeException('The album cover image could not be processed.');
+    $sourceWidth=imagesx($source);$sourceHeight=imagesy($source);$targetWidth=1200;$targetHeight=900;
+    $targetRatio=$targetWidth/$targetHeight;$sourceRatio=$sourceWidth/$sourceHeight;$sourceX=0;$sourceY=0;$cropWidth=$sourceWidth;$cropHeight=$sourceHeight;
+    if($sourceRatio>$targetRatio){$cropWidth=(int)round($sourceHeight*$targetRatio);$sourceX=(int)(($sourceWidth-$cropWidth)/2);}
+    elseif($sourceRatio<$targetRatio){$cropHeight=(int)round($sourceWidth/$targetRatio);$sourceY=(int)(($sourceHeight-$cropHeight)/2);}
+    $resized=imagecreatetruecolor($targetWidth,$targetHeight);
+    imagecopyresampled($resized,$source,0,0,$sourceX,$sourceY,$targetWidth,$targetHeight,$cropWidth,$cropHeight);
+    ob_start();imagejpeg($resized,null,82);$jpeg=(string)ob_get_clean();imagedestroy($source);imagedestroy($resized);
     return 'data:image/jpeg;base64,'.base64_encode($jpeg);
 }
 

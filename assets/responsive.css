@@ -12,7 +12,7 @@ button,.button,input{min-height:44px}
 .gallery-toolbar input[type="checkbox"]{min-height:0;width:18px;height:18px;accent-color:#245b45}
 .gallery-toolbar [data-selected]{color:#64716b;margin-right:auto}
 .gallery-toolbar button{padding:10px 17px}
-.gallery-toolbar .album-download{padding:10px 17px;white-space:nowrap}
+.gallery-toolbar .album-create{padding:10px 17px;white-space:nowrap;background:#fffdf8;color:#17231f;border:1px solid #d9ddd4}
 .gallery-toolbar .album-share{padding:10px 17px;white-space:nowrap;background:#fffdf8;color:#17231f;border:1px solid #d9ddd4}
 .gallery-pagination{display:flex;align-items:center;justify-content:center;gap:14px;margin:20px 0 0}.gallery-pagination button{padding:10px 16px;background:#fffdf8;color:#17231f;border:1px solid #d9ddd4}.gallery-pagination span{min-width:110px;text-align:center;color:#64716b;font-size:14px;font-weight:700}.gallery-pagination button:disabled{opacity:.4}
 .photo-select{position:absolute;z-index:3;top:8px;left:8px;width:30px;height:30px;border-radius:50%;background:#ffffffdd;display:grid;place-items:center;cursor:pointer;box-shadow:0 3px 12px #0003}
@@ -29,6 +29,10 @@ button,.button,input{min-height:44px}
 .delete-modal__content{padding:22px}.delete-modal__content h2{font-family:Georgia,serif;font-size:34px;margin:7px 0 9px}.delete-modal__content p{margin:0;color:#64716b;line-height:1.55}
 .delete-modal__error{margin-top:13px!important;padding:10px 12px;border-radius:10px;background:#fde8e5;color:#a53838!important;font-weight:700}
 .delete-modal__actions{display:grid;grid-template-columns:1fr 1.35fr;gap:10px;margin-top:22px}.delete-modal__actions button{width:100%}.delete-modal__confirm{background:#a53838}.delete-modal__confirm:hover{background:#7f2020}
+.album-modal{position:fixed;z-index:2100;inset:0;display:grid;place-items:center;padding:18px;background:#03100cdb;backdrop-filter:blur(10px)}.album-modal[hidden]{display:none}
+.album-modal__panel{width:min(620px,100%);max-height:94vh;overflow:auto;background:#fffdf8;color:#17231f;border:1px solid #d9ddd4;border-radius:24px;box-shadow:0 28px 100px #000a}
+.album-modal__cover{height:min(34vh,240px);display:grid;place-items:center;overflow:hidden;background:linear-gradient(145deg,#113f31,#071c16)}.album-modal__cover>img{width:100%;height:100%;object-fit:cover}.album-modal__cover [data-album-placeholder]{display:grid;place-items:center;gap:8px;color:#fff;font-weight:750}.album-modal__cover [data-album-placeholder] img{width:min(240px,60%);height:auto}
+.album-modal__content{padding:22px}.album-modal__content h2{font-family:Georgia,serif;font-size:36px;margin:7px 0 9px}.album-modal__content>p{color:#64716b;line-height:1.55}.album-modal__picker{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:18px;padding:12px 14px;border:1px solid #d9ddd4;border-radius:12px;font-weight:750}.album-modal__picker input{max-width:58%;min-height:0}.album-modal__content small{display:block;margin-top:7px;color:#64716b}.album-modal__error{padding:10px 12px;border-radius:10px;background:#fde8e5;color:#a53838!important;font-weight:700}.album-modal__actions{display:grid;grid-template-columns:1fr 1.45fr;gap:10px;margin-top:22px}.album-modal__actions button{width:100%}
 .photo-modal{position:fixed;inset:0;z-index:1000;display:grid;grid-template-columns:72px minmax(0,1fr) 72px;align-items:center;background:rgba(4,9,7,.95);padding:24px;color:#fff}
 .photo-modal[hidden]{display:none}
 .photo-modal__stage{height:calc(100vh - 48px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-width:0}

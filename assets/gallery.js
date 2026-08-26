@@ -28,7 +28,7 @@
   toolbar.id = 'gallery-download';
   toolbar.method = 'post';
   toolbar.action = '?action=download_zip';
-  toolbar.innerHTML = `<input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="event_id" value="${eventId || ''}"><input type="hidden" name="all_photos" value="1" data-all-photos disabled><label><input type="checkbox" data-select-all> Select all photos</label><span data-selected>0 selected</span><button type="submit" disabled>Download ZIP</button><a class="button light album-download" href="?action=download_photo_album&amp;event_id=${encodeURIComponent(eventId || '')}">Download photo album</a><button class="button light album-share" type="button">Copy shareable album link</button>`;
+  toolbar.innerHTML = `<input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="event_id" value="${eventId || ''}"><input type="hidden" name="all_photos" value="1" data-all-photos disabled><label><input type="checkbox" data-select-all> Select all photos</label><span data-selected>0 selected</span><button type="submit" disabled>Download ZIP</button><button class="button light album-create" type="button">Create Photo Album</button><button class="button light album-share" type="button">Copy shareable album link</button>`;
   document.querySelector('.gallery').before(toolbar);
   const selectedLabel = toolbar.querySelector('[data-selected]');
   const downloadButton = toolbar.querySelector('button');
@@ -51,6 +51,26 @@
   const pageStatus = pagination.querySelector('[data-page-status]');
   const shareButton = toolbar.querySelector('.album-share');
   bindAlbumShare(shareButton, eventId);
+  const albumCreate = toolbar.querySelector('.album-create');
+
+  const albumModal = document.createElement('div');
+  albumModal.className = 'album-modal';
+  albumModal.hidden = true;
+  albumModal.setAttribute('role','dialog');
+  albumModal.setAttribute('aria-modal','true');
+  albumModal.setAttribute('aria-labelledby','album-create-title');
+  albumModal.innerHTML = `<form class="album-modal__panel" enctype="multipart/form-data"><div class="album-modal__cover"><img data-album-preview alt="Selected album cover preview" hidden><div data-album-placeholder><img src="assets/povents-logo.png?v=5" alt="POVents"><span>Optional cover background</span></div></div><div class="album-modal__content"><div class="eyebrow">Offline photo album</div><h2 id="album-create-title">Create Photo Album</h2><p>Optionally choose a background image for the album cover. POVents will save and overwrite the event’s previous album copy.</p><label class="album-modal__picker"><span>Choose cover image</span><input type="file" name="album_cover" accept="image/jpeg,image/png,image/webp"></label><small>JPG, PNG, or WebP · maximum 5 MB · cropped to landscape</small><p class="album-modal__error" data-album-error hidden></p><div class="album-modal__actions"><button class="button light" type="button" data-album-cancel>Cancel</button><button class="button" type="submit" data-album-submit>Create and download</button></div></div></form>`;
+  document.body.appendChild(albumModal);
+  const albumForm=albumModal.querySelector('form'),albumInput=albumModal.querySelector('input[type="file"]'),albumPreview=albumModal.querySelector('[data-album-preview]'),albumPlaceholder=albumModal.querySelector('[data-album-placeholder]'),albumCancel=albumModal.querySelector('[data-album-cancel]'),albumSubmit=albumModal.querySelector('[data-album-submit]'),albumError=albumModal.querySelector('[data-album-error]');
+  let albumPreviewUrl='';
+  function closeAlbumModal(){albumModal.hidden=true;document.body.style.overflow='';if(albumPreviewUrl)URL.revokeObjectURL(albumPreviewUrl);albumPreviewUrl='';albumForm.reset();albumPreview.hidden=true;albumPreview.removeAttribute('src');albumPlaceholder.hidden=false;albumCreate.focus();}
+  albumCreate.addEventListener('click',()=>{albumError.hidden=true;albumModal.hidden=false;document.body.style.overflow='hidden';albumInput.focus();});
+  document.querySelector('.album-notice-create')?.addEventListener('click',event=>{event.preventDefault();albumCreate.click();});
+  albumCancel.addEventListener('click',closeAlbumModal);
+  albumModal.addEventListener('click',event=>{if(event.target===albumModal)closeAlbumModal();});
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!albumModal.hidden)closeAlbumModal();});
+  albumInput.addEventListener('change',()=>{if(albumPreviewUrl)URL.revokeObjectURL(albumPreviewUrl);const file=albumInput.files[0];if(!file){albumPreview.hidden=true;albumPlaceholder.hidden=false;return;}albumPreviewUrl=URL.createObjectURL(file);albumPreview.src=albumPreviewUrl;albumPreview.hidden=false;albumPlaceholder.hidden=true;});
+  albumForm.addEventListener('submit',async event=>{event.preventDefault();albumSubmit.disabled=true;albumCancel.disabled=true;albumSubmit.textContent='Creating…';albumError.hidden=true;const formData=new FormData(albumForm);formData.append('csrf',csrf);try{const response=await fetch(`?action=download_photo_album&event_id=${encodeURIComponent(eventId||'')}`,{method:'POST',body:formData});if(!response.ok)throw new Error(await response.text()||'The photo album could not be created.');const blob=await response.blob();const disposition=response.headers.get('Content-Disposition')||'';const match=disposition.match(/filename="?([^";]+)"?/i);const downloadUrl=URL.createObjectURL(blob);const anchor=document.createElement('a');anchor.href=downloadUrl;anchor.download=match?.[1]||'POVents-photo-album.html';document.body.appendChild(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(downloadUrl),1000);closeAlbumModal();albumCreate.textContent='Photo Album Created';setTimeout(()=>albumCreate.textContent='Create Photo Album',2500);}catch(error){albumError.textContent=error.message||'The photo album could not be created.';albumError.hidden=false;}finally{albumSubmit.disabled=false;albumCancel.disabled=false;albumSubmit.textContent='Create and download';}});
 
   const deleteModal = document.createElement('div');
   deleteModal.className = 'delete-modal';

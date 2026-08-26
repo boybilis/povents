@@ -19,7 +19,7 @@ ob_start(static function (string $html): string {
     }
     $html = str_replace(['Your Creator plan activates automatically','Check my plan'], ['Your event pass is added automatically','Check my event passes'], $html);
     if (isset($_GET['id'])) {
-        $albumNotice = '<strong>Save your photo album:</strong> The earliest photos expire $1 and will be permanently erased. Download the photo album at least once before this deadline so a saved album remains available after the original images are deleted. <a href="?action=download_photo_album&amp;event_id='.(int)$_GET['id'].'"><strong>Download photo album now</strong></a>';
+        $albumNotice = '<strong>Save your photo album:</strong> The earliest photos expire $1 and will be permanently erased. Create the photo album at least once before this deadline so a saved album remains available after the original images are deleted. <a class="album-notice-create" href="#gallery-download"><strong>Create Photo Album now</strong></a>';
         $html = preg_replace('~<strong>7-day storage:</strong> The earliest photos expire (.*?)\. Download originals before they are permanently erased\.~', $albumNotice, $html, 1) ?? $html;
     }
     $html = str_replace(['assets/app.js?v=4','assets/app.js?v=5','assets/app.js?v=6','assets/app.js?v=7'], 'assets/app.js?v=8', $html);
@@ -34,7 +34,7 @@ ob_start(static function (string $html): string {
     }
     return str_replace(
         ['</head>','</body>'],
-        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=13"></head>','<script src="assets/gallery.js?v=10"></script></body>'],
+        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=14"></head>','<script src="assets/gallery.js?v=11"></script></body>'],
         $html
     );
 });
@@ -52,7 +52,13 @@ if ($action === 'download_photo_album') {
     $u = require_user();
     $event = event_for_owner((int)($_GET['event_id'] ?? 0), (int)$u['id']);
     if (!$event) { http_response_code(404); exit('Event not found.'); }
-    download_photo_album($event);
+    $coverDataUri=null;
+    if($_SERVER['REQUEST_METHOD']==='POST'){
+        check_csrf();
+        try{$coverDataUri=album_cover_upload_data_uri($_FILES['album_cover']??[]);}
+        catch(Throwable $e){http_response_code(400);exit($e->getMessage());}
+    }
+    download_photo_album($event,false,$coverDataUri);
 }
 if ($action === 'shared_album_link') {
     header('Content-Type: application/json');
