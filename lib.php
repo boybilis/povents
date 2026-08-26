@@ -184,6 +184,7 @@ function download_photo_album(array $event, bool $shared = false, ?string $cover
     $safeTitle = e((string)$event['title']);
     $date = $event['event_date'] ? date('F j, Y', strtotime((string)$event['event_date'])) : '';
     $coverStyle = $coverDataUri ? ' style="background-image:linear-gradient(#071c1688,#071c16b8),url('.$coverDataUri.');background-size:cover;background-position:center"' : '';
+    $albumPageStyle = $coverDataUri ? ' style="background-image:linear-gradient(#f7f1e4c9,#f7f1e4c9),url('.$coverDataUri.');background-size:cover;background-position:center"' : '';
     if (ob_get_level()) ob_end_clean();
     set_time_limit(0);
     ob_start();
@@ -195,7 +196,7 @@ function download_photo_album(array $event, bool $shared = false, ?string $cover
     echo '<article class="page cover active"'.$coverStyle.'><div><img src="data:image/png;base64,'.base64_encode((string)file_get_contents(__DIR__.'/assets/povents-logo-dark.png')).'" alt="POVents"><h1>'.$safeTitle.'</h1><p>'.e($date).'</p><p>'.count($photos).' memories · available offline</p></div></article>';
     foreach ($albumPages as $pageIndex => $albumPage) {
         $pagePhotos = $albumPage['photos'];
-        echo '<article class="page '.$albumPage['orientation'].'-page"><header class="album-page-header"><span class="album-page-logo" role="img" aria-label="POVents"></span><strong>'.$safeTitle.'</strong></header><div class="grid">';
+        echo '<article class="page '.$albumPage['orientation'].'-page"'.$albumPageStyle.'><header class="album-page-header"><span class="album-page-logo" role="img" aria-label="POVents"></span><strong>'.$safeTitle.'</strong></header><div class="grid">';
         foreach ($pagePhotos as $photoIndex => $photo) {
             $path = __DIR__.'/uploads/'.$event['id'].'/'.basename($photo['file_name']);
             $tilt = (($pageIndex * 4 + $photoIndex) % 2 === 0) ? '-0.5deg' : '0.5deg';
