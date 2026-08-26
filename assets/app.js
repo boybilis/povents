@@ -5,8 +5,8 @@
   const canvas = camera.querySelector('canvas');
   const capture = camera.querySelector('[data-capture]');
   const switchButton = camera.querySelector('[data-switch]');
-  const status = camera.querySelector('[data-status]');
-  const strip = camera.querySelector('[data-strip]');
+  const status = document.querySelector('[data-status]');
+  const strip = document.querySelector('[data-strip]');
   const fileCamera = camera.querySelector('[data-file-camera]');
   const lastPhoto = new Image();
   lastPhoto.alt = 'Most recently captured photo';
