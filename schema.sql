@@ -5,6 +5,7 @@ CREATE TABLE users (
   password_hash VARCHAR(255) NOT NULL,
   subscription_status ENUM('inactive','active','past_due') NOT NULL DEFAULT 'inactive',
   subscription_ends_at DATETIME NULL,
+  event_credits INT UNSIGNED NOT NULL DEFAULT 0,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

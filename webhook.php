@@ -18,7 +18,7 @@ if ($type === 'checkout_session.payment.paid') {
     $s=db()->prepare("SELECT * FROM payments WHERE checkout_id=? AND status='pending' FOR UPDATE");$s->execute([$checkout]);$payment=$s->fetch();
     if ($payment) {
         db()->prepare("UPDATE payments SET status='paid',paid_at=NOW() WHERE id=?")->execute([$payment['id']]);
-        db()->prepare("UPDATE users SET subscription_status='active',subscription_ends_at=DATE_ADD(GREATEST(COALESCE(subscription_ends_at,NOW()),NOW()),INTERVAL ? DAY) WHERE id=?")->execute([(int)cfg('plan_days'),$payment['user_id']]);
+        db()->prepare("UPDATE users SET subscription_status='active',event_credits=event_credits+1,subscription_ends_at=DATE_ADD(GREATEST(COALESCE(subscription_ends_at,NOW()),NOW()),INTERVAL ? DAY) WHERE id=?")->execute([(int)cfg('plan_days'),$payment['user_id']]);
     }
     db()->commit();
 }

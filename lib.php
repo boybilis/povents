@@ -38,7 +38,7 @@ function check_csrf(): void { if (!hash_equals($_SESSION['csrf'] ?? '', $_POST['
 function flash(string $type, string $message): void { $_SESSION['flash'] = compact('type', 'message'); }
 function pull_flash(): ?array { $f = $_SESSION['flash'] ?? null; unset($_SESSION['flash']); return $f; }
 function active_subscription(array $u): bool {
-    return $u['subscription_status'] === 'active' && (!$u['subscription_ends_at'] || strtotime($u['subscription_ends_at']) > time());
+    return $u['subscription_status'] === 'active' && (int)($u['event_credits'] ?? 0) > 0 && (!$u['subscription_ends_at'] || strtotime($u['subscription_ends_at']) > time());
 }
 function local_payment_bypass(): bool {
     if (cfg('local_payment_bypass') !== true) return false;
@@ -46,7 +46,7 @@ function local_payment_bypass(): bool {
     return in_array($host, ['localhost', '127.0.0.1', '::1'], true) || filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_NO_PRIV_RANGE) === false && filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false;
 }
 function refresh_user(int $id): void {
-    $s = db()->prepare('SELECT id,name,email,subscription_status,subscription_ends_at FROM users WHERE id=?');
+    $s = db()->prepare('SELECT id,name,email,subscription_status,subscription_ends_at,event_credits FROM users WHERE id=?');
     $s->execute([$id]); $_SESSION['user'] = $s->fetch();
 }
 function event_for_owner(int $id, int $userId): ?array {
