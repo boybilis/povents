@@ -1,6 +1,19 @@
 /* Mobile-first refinements layered over the main POVents design. */
 html,body{max-width:100%;overflow-x:hidden}
 button,.button,input{min-height:44px}
+.gallery{columns:unset;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+.gallery .shot{margin:0}
+.gallery .shot img{width:100%;height:auto;aspect-ratio:1/1;object-fit:cover;border-radius:13px;transition:transform .2s ease,filter .2s ease}
+.gallery .shot a:hover img{transform:scale(1.025);filter:brightness(.92)}
+.photo-modal{position:fixed;inset:0;z-index:1000;display:grid;grid-template-columns:72px minmax(0,1fr) 72px;align-items:center;background:rgba(4,9,7,.95);padding:24px;color:#fff}
+.photo-modal[hidden]{display:none}
+.photo-modal__stage{height:calc(100vh - 48px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-width:0}
+.photo-modal__image{display:block;max-width:100%;max-height:calc(100vh - 120px);object-fit:contain;border-radius:12px;box-shadow:0 24px 80px #000}
+.photo-modal__nav,.photo-modal__close{border:0;background:#ffffff20;color:#fff;width:52px;height:52px;padding:0;font-size:30px;border-radius:50%}
+.photo-modal__nav:hover,.photo-modal__close:hover{background:#ffffff38}
+.photo-modal__close{position:absolute;right:20px;top:20px;z-index:2;font-size:25px}
+.photo-modal__meta{display:flex;align-items:center;gap:14px;font-size:13px;color:#cbd4cf}
+.photo-modal__download{color:#17231f;background:#dff25f;padding:8px 14px;border-radius:999px;text-decoration:none;font-weight:800}
 
 @media (max-width:760px){
   .shell{width:calc(100% - 24px)}
@@ -56,6 +69,11 @@ button,.button,input{min-height:44px}
   .strip{grid-template-columns:repeat(3,minmax(0,1fr))!important}
 
   a.button[style*="position:fixed"]{right:12px!important;bottom:12px!important;padding:12px 16px}
+  .photo-modal{grid-template-columns:48px minmax(0,1fr) 48px;padding:12px}
+  .photo-modal__stage{height:calc(100vh - 24px)}
+  .photo-modal__image{max-height:calc(100vh - 100px)}
+  .photo-modal__nav{width:42px;height:42px;font-size:24px}
+  .photo-modal__close{right:12px;top:12px;width:44px;height:44px}
 }
 
 @media (max-width:390px){
