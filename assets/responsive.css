@@ -139,3 +139,4 @@ button,.button,input{min-height:44px}
   .shot img{height:150px}
   .auth h1,.dash-head h1{font-size:38px}
 }
+.footer-legal{display:block;margin-top:12px;font-size:13px}.footer-legal a{color:inherit;font-weight:800;text-decoration:underline;text-underline-offset:3px}

@@ -23,6 +23,7 @@ ob_start(static function (string $html): string {
         $html = preg_replace('~<strong>7-day storage:</strong> The earliest photos expire (.*?)\. Download originals before they are permanently erased\.~', $albumNotice, $html, 1) ?? $html;
     }
     $html = str_replace(['assets/app.js?v=4','assets/app.js?v=5','assets/app.js?v=6','assets/app.js?v=7'], 'assets/app.js?v=8', $html);
+    $html = str_replace('assets/responsive.css?v=15', 'assets/responsive.css?v=16', $html);
     $html = str_replace(['assets/style.css"','assets/style.css?v=4"'], 'assets/style.css?v=5"', $html);
     $html = str_replace(
         ['<article class="feature"><div class="number">1</div>','<article class="feature"><div class="number">2</div>','<article class="feature"><div class="number">3</div>'],
@@ -406,7 +407,7 @@ if ($page === 'capture') {
 }
 
 function header_html(string $title='POVents'): void { $u=user(); $f=pull_flash(); ?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="<?=csrf()?>"><title><?=e($title)?> · POVents</title><meta name="description" content="Collect every guest's point of view through one event QR code."><link rel="stylesheet" href="assets/style.css"></head><body><?php if($f): ?><div hidden data-toast-type="<?=e($f['type'])?>" data-toast-message="<?=e($f['message'])?>"></div><?php endif; ?><header class="shell nav"><a class="brand" href="?"><i></i>POVents</a><nav class="navlinks"><?php if($u): ?><a href="?page=dashboard">My events</a><?php if(is_admin($u)): ?><a class="admin-nav" href="?page=admin-settings">Admin settings</a><?php endif; ?><form method="post" action="?action=logout"><input type="hidden" name="csrf" value="<?=csrf()?>"><button class="button light">Log out</button></form><?php else: ?><a href="?page=login">Log in</a><a class="button" href="?page=register">Start creating</a><?php endif; ?></nav></header>
-function footer_html(): void { ?><footer class="shell section muted">POVents — every angle tells the story.</footer></body></html><?php }
+function footer_html(): void { ?><footer class="shell section muted">POVents — every angle tells the story. <span class="footer-legal">WebApp owned by <a href="https://eaboybi.tech" target="_blank" rel="noopener">eaboybi.tech</a>. All Rights Reserved 2026.</span></footer></body></html><?php }
 
 if ($page === 'verify-registration') {
     $pending=$_SESSION['pending_registration']??null;
