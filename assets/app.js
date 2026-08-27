@@ -47,6 +47,7 @@
   let stream;
   let imageCapture = null;
   let remaining = Number(camera.dataset.remaining || 5);
+  const photoLimit = Math.max(1, Number(camera.dataset.limit || remaining || 5));
   let nativeCapture = false;
   const maxPhotoBytes = 1536 * 1024;
   let pendingPhoto = null;
@@ -71,7 +72,7 @@
     video.style.display = 'none';
     switchButton.style.display = 'none';
     capture.disabled = remaining < 1;
-    setStatus(remaining < 1 ? 'All 5 moments captured — thank you!' : `Tap the shutter to open your phone camera · ${remaining} remaining`);
+    setStatus(remaining < 1 ? `All ${photoLimit} moments captured — thank you!` : `Tap the shutter to open your phone camera · ${remaining} remaining`);
   }
 
   async function start() {
@@ -79,7 +80,7 @@
     if (remaining < 1) {
       capture.disabled = true;
       switchButton.style.display = 'none';
-      setStatus('All 5 moments captured — thank you!');
+      setStatus(`All ${photoLimit} moments captured — thank you!`);
       return;
     }
     try {
@@ -235,7 +236,7 @@
       Object.assign(img.style, {width: '100%', height: 'auto', aspectRatio: '1 / 1', objectFit: 'cover', borderRadius: '14px', border: '2px solid #29322e'});
       strip.prepend(img);
       galleryTitle.style.display = 'flex';
-      setStatus(remaining ? `${remaining} photo${remaining === 1 ? '' : 's'} remaining` : 'All 5 moments captured — thank you!');
+      setStatus(remaining ? `${remaining} photo${remaining === 1 ? '' : 's'} remaining` : `All ${photoLimit} moments captured — thank you!`);
       capture.disabled = remaining < 1;
       return true;
     } catch (error) {
@@ -383,7 +384,7 @@
         <p>You remain responsible for respecting the privacy, dignity, and rights of people shown in your photos. Do not upload a photo if you do not agree to these terms.</p>
         <h2>Privacy Policy</h2>
         <ul>
-          <li><strong>Information processed:</strong> approved photos, optional captions, capture time, and limited session information needed to enforce the five-photo limit and secure uploads.</li>
+          <li><strong>Information processed:</strong> approved photos, optional captions, capture time, and limited session information needed to enforce the ${photoLimit}-photo limit and secure uploads.</li>
           <li><strong>Purpose:</strong> to deliver photos to the organizer’s private event gallery, ZIP download, offline album, and any organizer-created shareable album link.</li>
           <li><strong>Who controls the photos:</strong> the event organizer controls their event collection; POVents provides the upload and temporary storage service.</li>
           <li><strong>Storage:</strong> POVents permanently deletes hosted photos seven days after the event. An organizer or recipient may download and retain copies beyond that period, which POVents cannot delete or control.</li>
