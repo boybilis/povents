@@ -106,6 +106,7 @@
       nativeCapture = false;
       video.srcObject = stream;
       await video.play().catch(() => {});
+      video.style.transform = facingMode === 'user' ? 'scaleX(-1)' : 'none';
       const videoTrack = stream.getVideoTracks()[0];
       imageCapture = 'ImageCapture' in window && videoTrack ? new ImageCapture(videoTrack) : null;
       switchButton.style.display = '';
@@ -134,6 +135,20 @@
     }
     bitmap.close?.();
     return result;
+  }
+
+  async function mirrorPhoto(blob) {
+    const bitmap = await createImageBitmap(blob);
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext('2d');
+    context.save();
+    context.translate(canvas.width, 0);
+    context.scale(-1, 1);
+    context.drawImage(bitmap, 0, 0);
+    context.restore();
+    bitmap.close?.();
+    return await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 1));
   }
 
   async function addWatermark(blob, caption) {
@@ -304,11 +319,15 @@
       canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
       blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 1));
     }
+    if (facingMode === 'user') blob = await mirrorPhoto(blob);
     review(blob);
   });
 
   fileCamera.addEventListener('change', async () => {
-    if (fileCamera.files?.[0]) review(fileCamera.files[0]);
+    if (fileCamera.files?.[0]) {
+      const photo = facingMode === 'user' ? await mirrorPhoto(fileCamera.files[0]) : fileCamera.files[0];
+      review(photo);
+    }
     fileCamera.value = '';
   });
 
