@@ -17,8 +17,12 @@ if ($type === 'checkout_session.payment.paid') {
     db()->beginTransaction();
     $s=db()->prepare("SELECT * FROM payments WHERE checkout_id=? AND status='pending' FOR UPDATE");$s->execute([$checkout]);$payment=$s->fetch();
     if ($payment) {
+        $plan=pricing_plan((int)($payment['pricing_plan_id']??0));
+        if(!$plan){$plan=db()->query('SELECT * FROM pricing_plans WHERE is_active=1 ORDER BY is_featured DESC,display_order,id LIMIT 1')->fetch();}
+        if(!$plan) throw new RuntimeException('No pricing plan is available for this payment.');
         db()->prepare("UPDATE payments SET status='paid',paid_at=NOW() WHERE id=?")->execute([$payment['id']]);
-        db()->prepare("UPDATE users SET subscription_status='active',event_credits=event_credits+1,subscription_ends_at=NULL WHERE id=?")->execute([$payment['user_id']]);
+        db()->prepare('INSERT INTO user_plan_credits(user_id,pricing_plan_id,credits) VALUES(?,?,?) ON DUPLICATE KEY UPDATE credits=credits+VALUES(credits)')->execute([$payment['user_id'],$plan['id'],$plan['passes_per_purchase']]);
+        db()->prepare("UPDATE users SET subscription_status='active',event_credits=event_credits+?,subscription_ends_at=NULL WHERE id=?")->execute([$plan['passes_per_purchase'],$payment['user_id']]);
     }
     db()->commit();
 }

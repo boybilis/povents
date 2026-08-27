@@ -47,6 +47,22 @@ function check_csrf(): void { if (!hash_equals($_SESSION['csrf'] ?? '', $_POST['
 function flash(string $type, string $message): void { $_SESSION['flash'] = compact('type', 'message'); }
 function pull_flash(): ?array { $f = $_SESSION['flash'] ?? null; unset($_SESSION['flash']); return $f; }
 function is_admin(array $u): bool { return (int)($u['is_admin'] ?? 0) === 1; }
+function require_admin(): array {
+    $u = require_user();
+    if (!is_admin($u)) { http_response_code(403); exit('Administrator access required.'); }
+    return $u;
+}
+function active_pricing_plans(): array {
+    return db()->query('SELECT * FROM pricing_plans WHERE is_active=1 ORDER BY is_featured DESC,display_order ASC,id ASC')->fetchAll();
+}
+function pricing_plan(int $id, bool $activeOnly = false): ?array {
+    $sql='SELECT * FROM pricing_plans WHERE id=?'.($activeOnly?' AND is_active=1':'');
+    $s=db()->prepare($sql); $s->execute([$id]); return $s->fetch() ?: null;
+}
+function plan_credits(int $userId): array {
+    $s=db()->prepare('SELECT c.pricing_plan_id,c.credits,p.* FROM user_plan_credits c JOIN pricing_plans p ON p.id=c.pricing_plan_id WHERE c.user_id=? AND c.credits>0 ORDER BY p.is_featured DESC,p.display_order,p.id');
+    $s->execute([$userId]); return $s->fetchAll();
+}
 function active_subscription(array $u): bool {
     return is_admin($u) || (int)($u['event_credits'] ?? 0) > 0;
 }
@@ -200,7 +216,7 @@ function shared_album_signature(array $event, int $expires): string {
 }
 
 function shared_album_url(array $event): string {
-    $expires = (new DateTimeImmutable($event['event_date'].' 23:59:59'))->modify('+'.(int)cfg('photo_retention_days').' days')->getTimestamp();
+    $expires = (new DateTimeImmutable($event['event_date'].' 23:59:59'))->modify('+'.(int)($event['photo_retention_days']??cfg('photo_retention_days')).' days')->getTimestamp();
     return url('?action=download_shared_album&event_id='.$event['id'].'&expires='.$expires.'&signature='.shared_album_signature($event, $expires));
 }
 
