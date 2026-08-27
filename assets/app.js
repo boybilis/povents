@@ -188,8 +188,12 @@
       context.fillStyle = '#072a20';
       const captionX = padding + logoWidth + padding;
       const captionWidth = Math.max(fontSize * 2, canvas.width - captionX - padding);
-      let captionText = `“${caption}”`;
-      while (captionText.length > 3 && context.measureText(captionText).width > captionWidth) captionText = `${captionText.slice(0, -2)}…”`;
+      let captionCore = caption;
+      let captionText = `“${captionCore}”`;
+      while (captionCore.length > 1 && context.measureText(captionText).width > captionWidth) {
+        captionCore = captionCore.slice(0, -1);
+        captionText = `“${captionCore}…”`;
+      }
       context.fillText(captionText, captionX, canvas.height - barHeight / 2);
     }
     bitmap.close?.();
