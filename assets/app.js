@@ -175,8 +175,10 @@
     const padding = Math.round(fontSize * .7);
     context.font = `700 ${fontSize}px system-ui, sans-serif`;
     context.textBaseline = 'middle';
-    const logoHeight = Math.round(fontSize * 1.45);
-    const logoWidth = Math.round(logoHeight * watermarkLogo.naturalWidth / watermarkLogo.naturalHeight);
+    let logoHeight = Math.round(fontSize * 1.45);
+    let logoWidth = Math.round(logoHeight * watermarkLogo.naturalWidth / watermarkLogo.naturalHeight);
+    const maximumLogoWidth = Math.round(canvas.width * .38);
+    if (logoWidth > maximumLogoWidth) { logoHeight = Math.round(logoHeight * maximumLogoWidth / logoWidth); logoWidth = maximumLogoWidth; }
     const barHeight = Math.max(logoHeight, fontSize) + padding * 1.5;
     context.fillStyle = 'rgba(255, 255, 255, .78)';
     context.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
@@ -184,10 +186,16 @@
     context.drawImage(watermarkLogo, padding, logoY, logoWidth, logoHeight);
     if (caption) {
       context.fillStyle = '#072a20';
-      context.fillText(`“${caption}”`, padding + logoWidth + padding, canvas.height - barHeight / 2, canvas.width - logoWidth - padding * 3);
+      const captionX = padding + logoWidth + padding;
+      const captionWidth = Math.max(fontSize * 2, canvas.width - captionX - padding);
+      let captionText = `“${caption}”`;
+      while (captionText.length > 3 && context.measureText(captionText).width > captionWidth) captionText = `${captionText.slice(0, -2)}…”`;
+      context.fillText(captionText, captionX, canvas.height - barHeight / 2);
     }
     bitmap.close?.();
-    return await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 1));
+    const result = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .96));
+    if (!result) throw new Error('The caption could not be applied to this photo.');
+    return result;
   }
 
   async function upload(blob) {
@@ -230,7 +238,7 @@
     }
   }
 
-  function review(blob) {
+  function review(blob, caption = '') {
     clearTimeout(previewTimer);
     pendingPhoto = blob;
     if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
@@ -242,8 +250,8 @@
     reviewControls.style.display = 'grid';
     reviewControls.style.pointerEvents = 'auto';
     reviewControls.querySelectorAll('button').forEach(button => { button.disabled = false; });
-    captionInput.value = '';
-    watermarkPreviewCaption.textContent = '';
+    captionInput.value = caption;
+    watermarkPreviewCaption.textContent = caption ? `“${caption}”` : '';
     watermarkPreview.hidden = false;
     setStatus('Keep this photo or retake it?');
   }
@@ -280,16 +288,16 @@
     setStatus('Adding watermark…');
     let watermarkedPhoto;
     try { watermarkedPhoto = await addWatermark(approvedPhoto, caption); }
-    catch (_) {
+    catch (error) {
       if (approvedPreviewUrl) URL.revokeObjectURL(approvedPreviewUrl);
-      review(approvedPhoto);
-      setStatus('Could not add the watermark. Please try again.', true);
+      review(approvedPhoto, caption);
+      setStatus(error.message || 'Could not add the watermark. Please try again.', true);
       return;
     }
     setStatus('Uploading approved photo…');
     const uploaded = await upload(watermarkedPhoto);
     if (approvedPreviewUrl) URL.revokeObjectURL(approvedPreviewUrl);
-    if (!uploaded) review(approvedPhoto);
+    if (!uploaded) review(approvedPhoto, caption);
   });
 
   capture.addEventListener('click', async () => {
