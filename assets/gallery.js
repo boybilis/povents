@@ -9,10 +9,9 @@
         const data = await response.json();
         if (!response.ok || !data.url) throw new Error(data.error || 'Could not create the share link.');
         await navigator.clipboard.writeText(data.url);
-        button.textContent = 'Album link copied!';
-        setTimeout(() => { button.textContent = 'Copy shareable album link'; }, 2500);
+        window.POVentsToast?.('Shareable album link copied.', 'success');
       } catch (error) {
-        button.textContent = error.message || 'Copy failed';
+        window.POVentsToast?.(error.message || 'The album link could not be copied.', 'error');
       } finally { button.disabled = false; }
     });
   }
@@ -75,7 +74,7 @@
   albumModal.addEventListener('click',event=>{if(event.target===albumModal)closeAlbumModal();});
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!albumModal.hidden)closeAlbumModal();});
   albumInput.addEventListener('change',()=>{if(albumPreviewUrl)URL.revokeObjectURL(albumPreviewUrl);const file=albumInput.files[0];if(!file){albumPreview.hidden=true;albumPlaceholder.hidden=false;return;}albumPreviewUrl=URL.createObjectURL(file);albumPreview.src=albumPreviewUrl;albumPreview.hidden=false;albumPlaceholder.hidden=true;});
-  albumForm.addEventListener('submit',async event=>{event.preventDefault();albumSubmit.disabled=true;albumCancel.disabled=true;albumSubmit.textContent='Creating…';albumError.hidden=true;const formData=new FormData(albumForm);formData.append('csrf',csrf);try{const response=await fetch(`?action=download_photo_album&event_id=${encodeURIComponent(eventId||'')}`,{method:'POST',body:formData});if(!response.ok)throw new Error(await response.text()||'The photo album could not be created.');const blob=await response.blob();const disposition=response.headers.get('Content-Disposition')||'';const match=disposition.match(/filename="?([^";]+)"?/i);const downloadUrl=URL.createObjectURL(blob);const anchor=document.createElement('a');anchor.href=downloadUrl;anchor.download=match?.[1]||'POVents-photo-album.html';document.body.appendChild(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(downloadUrl),1000);closeAlbumModal();albumCreate.textContent='Photo Album Created';setTimeout(()=>albumCreate.textContent='Create Photo Album',2500);}catch(error){albumError.textContent=error.message||'The photo album could not be created.';albumError.hidden=false;}finally{albumSubmit.disabled=false;albumCancel.disabled=false;albumSubmit.textContent='Create and download';}});
+  albumForm.addEventListener('submit',async event=>{event.preventDefault();albumSubmit.disabled=true;albumCancel.disabled=true;albumSubmit.textContent='Creating…';albumError.hidden=true;const formData=new FormData(albumForm);formData.append('csrf',csrf);try{const response=await fetch(`?action=download_photo_album&event_id=${encodeURIComponent(eventId||'')}`,{method:'POST',body:formData});if(!response.ok)throw new Error(await response.text()||'The photo album could not be created.');const blob=await response.blob();const disposition=response.headers.get('Content-Disposition')||'';const match=disposition.match(/filename="?([^";]+)"?/i);const downloadUrl=URL.createObjectURL(blob);const anchor=document.createElement('a');anchor.href=downloadUrl;anchor.download=match?.[1]||'POVents-photo-album.html';document.body.appendChild(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(downloadUrl),1000);closeAlbumModal();window.POVentsToast?.('Photo album created and downloaded.', 'success');}catch(error){albumError.textContent=error.message||'The photo album could not be created.';albumError.hidden=false;window.POVentsToast?.(error.message||'The photo album could not be created.','error');}finally{albumSubmit.disabled=false;albumCancel.disabled=false;albumSubmit.textContent='Create and download';}});
 
   const deleteModal = document.createElement('div');
   deleteModal.className = 'delete-modal';
@@ -124,6 +123,7 @@
         checks.splice(index, 1);
       }
       document.querySelector('.dash-head > strong')?.replaceChildren(document.createTextNode(`${data.remaining_count} photos`));
+      window.POVentsToast?.('Photo permanently deleted.', 'success');
       closeDeleteModal();
       if (!links.length) {
         toolbar.remove();
@@ -144,6 +144,7 @@
       deleteConfirm.disabled = false;
       deleteConfirm.textContent = 'Try again';
       deleteCancel.disabled = false;
+      window.POVentsToast?.(error.message || 'The photo could not be deleted.', 'error');
     }
   });
   deleteModal.addEventListener('click', event => { if (event.target === deleteModal) closeDeleteModal(); });

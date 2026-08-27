@@ -33,8 +33,8 @@
       if (!response.ok) throw new Error(await response.text() || 'The presentation QR could not be created.');
       const blob = await response.blob(); const disposition = response.headers.get('Content-Disposition') || ''; const match = disposition.match(/filename="?([^";]+)"?/i);
       const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = match?.[1] || 'POVents-presentation-QR.svg'; document.body.appendChild(anchor); anchor.click(); anchor.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000); close();
-      trigger.textContent = 'Presentation QR Created'; setTimeout(() => trigger.textContent = 'Create Presentation QR', 2500);
-    } catch (error) { errorBox.textContent = error.message || 'The presentation QR could not be created.'; errorBox.hidden = false; }
+      window.POVentsToast?.('Presentation QR created and downloaded.', 'success');
+    } catch (error) { errorBox.textContent = error.message || 'The presentation QR could not be created.'; errorBox.hidden = false; window.POVentsToast?.(errorBox.textContent, 'error'); }
     finally { submit.disabled = false; cancel.disabled = false; submit.textContent = 'Create and download'; }
   });
 })();
