@@ -208,9 +208,8 @@
       blob = await fitAtFullQuality(blob);
       if (blob.size > maxPhotoBytes) throw new Error('This photo could not be fitted within the 1.5 MB limit.');
     } catch (error) {
-      setStatus(error.message || 'Could not prepare this photo.', true);
       capture.disabled = false;
-      return false;
+      throw new Error(error.message || 'Could not prepare this photo.');
     }
     const form = new FormData();
     form.append('photo', blob, 'moment.jpg');
@@ -218,7 +217,10 @@
     form.append('csrf', document.querySelector('meta[name="csrf-token"]').content);
     try {
       const response = await fetch('?action=upload', {method: 'POST', body: form});
-      const data = await response.json();
+      const responseText = await response.text();
+      let data;
+      try { data = JSON.parse(responseText); }
+      catch (_) { throw new Error(responseText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || `Upload failed with server status ${response.status}.`); }
       if (!response.ok) throw new Error(data.error || 'Upload failed');
       remaining = data.remaining;
       lastPhoto.src = data.url;
@@ -237,8 +239,8 @@
       capture.disabled = remaining < 1;
       return true;
     } catch (error) {
-      setStatus(error.message, true); capture.disabled = false;
-      return false;
+      capture.disabled = false;
+      throw error;
     }
   }
 
@@ -299,9 +301,16 @@
       return;
     }
     setStatus('Uploading approved photo…');
-    const uploaded = await upload(watermarkedPhoto);
-    if (approvedPreviewUrl) URL.revokeObjectURL(approvedPreviewUrl);
-    if (!uploaded) review(approvedPhoto, caption);
+    try {
+      await upload(watermarkedPhoto);
+      if (approvedPreviewUrl) URL.revokeObjectURL(approvedPreviewUrl);
+    } catch (error) {
+      if (approvedPreviewUrl) URL.revokeObjectURL(approvedPreviewUrl);
+      review(approvedPhoto, caption);
+      const message = error.message || 'The approved photo could not be uploaded.';
+      setStatus(message, true);
+      window.POVentsToast?.(message, 'error', 7000);
+    }
   });
 
   capture.addEventListener('click', async () => {
