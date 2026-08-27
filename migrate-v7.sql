@@ -8,7 +8,8 @@ CREATE TABLE pricing_plans (
   max_guest_scans INT UNSIGNED NOT NULL DEFAULT 50 COMMENT '0 means unlimited',
   max_photos_per_session SMALLINT UNSIGNED NOT NULL DEFAULT 5,
   photo_retention_days SMALLINT UNSIGNED NOT NULL DEFAULT 7,
-  reels_per_event SMALLINT UNSIGNED NOT NULL DEFAULT 3 COMMENT '0 means unlimited',
+  reels_per_event SMALLINT UNSIGNED NOT NULL DEFAULT 3,
+  reels_unlimited TINYINT(1) NOT NULL DEFAULT 0,
   photo_albums_per_event SMALLINT UNSIGNED NOT NULL DEFAULT 1,
   reel_duration_seconds SMALLINT UNSIGNED NOT NULL DEFAULT 30,
   reel_image_count SMALLINT UNSIGNED NOT NULL DEFAULT 20,
@@ -19,10 +20,11 @@ CREATE TABLE pricing_plans (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-INSERT INTO pricing_plans(name,slug,description,price_centavos,passes_per_purchase,max_guest_scans,max_photos_per_session,photo_retention_days,reels_per_event,photo_albums_per_event,reel_duration_seconds,reel_image_count,is_active,is_featured,display_order)
+INSERT INTO pricing_plans(name,slug,description,price_centavos,passes_per_purchase,max_guest_scans,max_photos_per_session,photo_retention_days,reels_per_event,reels_unlimited,photo_albums_per_event,reel_duration_seconds,reel_image_count,is_active,is_featured,display_order)
 VALUES
-('POVents 299','povents-299','One event for up to 50 guest scan sessions, with three reels and one saved photo album.',29900,1,50,5,7,3,1,30,20,1,1,10),
-('POVents 899 Unlimited','povents-899-unlimited','One event with unlimited guest scan sessions, unlimited reels, and one saved photo album.',89900,1,0,5,7,0,1,30,20,1,0,20);
+('POVents 299','povents-299','One event for up to 50 guest scan sessions, with one saved photo album.',29900,1,50,5,7,0,0,1,30,20,1,0,10),
+('POVents 599','povents-599','One event for up to 100 guest scan sessions, with three reels and one saved photo album.',59900,1,100,5,7,3,0,1,30,20,1,1,20),
+('POVents 899 Unlimited','povents-899-unlimited','One event with unlimited guest scan sessions, unlimited reels, one saved photo album, and 15-day original-photo storage.',89900,1,0,5,15,0,1,1,30,20,1,0,30);
 
 CREATE TABLE user_plan_credits (
   user_id INT UNSIGNED NOT NULL,
@@ -44,7 +46,8 @@ ALTER TABLE events
   ADD COLUMN max_photos_per_session SMALLINT UNSIGNED NOT NULL DEFAULT 5 AFTER max_guest_scans,
   ADD COLUMN photo_retention_days SMALLINT UNSIGNED NOT NULL DEFAULT 7 AFTER max_photos_per_session,
   ADD COLUMN reels_allowed SMALLINT UNSIGNED NOT NULL DEFAULT 3 AFTER photo_retention_days,
-  ADD COLUMN photo_albums_allowed SMALLINT UNSIGNED NOT NULL DEFAULT 1 AFTER reels_allowed,
+  ADD COLUMN reels_unlimited TINYINT(1) NOT NULL DEFAULT 0 AFTER reels_allowed,
+  ADD COLUMN photo_albums_allowed SMALLINT UNSIGNED NOT NULL DEFAULT 1 AFTER reels_unlimited,
   ADD COLUMN reel_duration_seconds SMALLINT UNSIGNED NOT NULL DEFAULT 30 AFTER photo_albums_allowed,
   ADD COLUMN reel_image_count SMALLINT UNSIGNED NOT NULL DEFAULT 20 AFTER reel_duration_seconds,
   ADD CONSTRAINT fk_events_plan FOREIGN KEY (pricing_plan_id) REFERENCES pricing_plans(id) ON DELETE SET NULL;

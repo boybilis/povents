@@ -30,7 +30,7 @@
   toolbar.action = '?action=download_zip';
   const metadataSource=document.querySelector('.presentation-qr-create');
   const reelsAllowed=Number(metadataSource?.dataset.reelsAllowed||3),reelDuration=Number(metadataSource?.dataset.reelDuration||30),reelImages=Number(metadataSource?.dataset.reelImages||20);
-  const unlimitedReels=reelsAllowed===0;
+  const unlimitedReels=metadataSource?.dataset.reelsUnlimited==='1';
   toolbar.innerHTML = `<input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="event_id" value="${eventId || ''}"><input type="hidden" name="all_photos" value="1" data-all-photos disabled><label><input type="checkbox" data-select-all> Select all photos</label><span data-selected>0 selected</span><button type="submit" disabled>Download ZIP</button><button class="button light reel-create" type="button" data-reel-create disabled>Create ${reelDuration}s Reel</button><button class="button light album-create" type="button">Create Photo Album</button><button class="button light album-share" type="button">Copy shareable album link</button>`;
   document.querySelector('.gallery').before(toolbar);
   const selectedLabel = toolbar.querySelector('[data-selected]');
@@ -197,8 +197,8 @@
     downloadButton.disabled = count === 0;
     const reelsRemaining = unlimitedReels ? -1 : Math.max(0, reelsAllowed - reelsCreated);
     reelButton.disabled = (!unlimitedReels && reelsRemaining === 0) || count !== reelImages;
-    reelButton.textContent = !unlimitedReels && reelsRemaining === 0 ? `All ${reelsAllowed} reels created` : `Create ${reelDuration}s Reel${unlimitedReels?' · Unlimited':` · ${reelsRemaining} left`}`;
-    reelButton.title = !unlimitedReels && reelsRemaining === 0 ? 'All reels included with this event plan have been used' : (count < reelImages ? `Select ${reelImages-count} more photo${reelImages-count===1?'':'s'}` : (count > reelImages ? `Unselect ${count-reelImages} photo${count-reelImages===1?'':'s'}` : `Create a ${reelDuration}-second reel using these ${reelImages} photos`));
+    reelButton.textContent = reelsAllowed===0&&!unlimitedReels?'Reels not included':(!unlimitedReels&&reelsRemaining===0?`All ${reelsAllowed} reels created`:`Create ${reelDuration}s Reel${unlimitedReels?' · Unlimited':` · ${reelsRemaining} left`}`);
+    reelButton.title = reelsAllowed===0&&!unlimitedReels?'Video reels are not included with this event plan':(!unlimitedReels&&reelsRemaining===0?'All reels included with this event plan have been used':(count < reelImages ? `Select ${reelImages-count} more photo${reelImages-count===1?'':'s'}` : (count > reelImages ? `Unselect ${count-reelImages} photo${count-reelImages===1?'':'s'}` : `Create a ${reelDuration}-second reel using these ${reelImages} photos`)));
     selectAll.checked = checks.length > 0 && count === checks.length;
     selectAll.indeterminate = count > 0 && count < checks.length;
     allPhotos.disabled = !selectAll.checked;
