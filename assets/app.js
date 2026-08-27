@@ -168,8 +168,9 @@
       sourceHeight = bitmap.width / targetRatio;
       sourceY = (bitmap.height - sourceHeight) / 2;
     }
-    canvas.width = Math.round(sourceWidth);
-    canvas.height = Math.round(sourceHeight);
+    const portrait = bitmap.height > bitmap.width;
+    canvas.width = portrait ? 768 : 1024;
+    canvas.height = portrait ? 1024 : 768;
     const context = canvas.getContext('2d');
     context.drawImage(bitmap, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
     const fontSize = Math.max(22, Math.min(54, Math.round(canvas.width * .035)));
