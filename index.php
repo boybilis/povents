@@ -24,6 +24,11 @@ ob_start(static function (string $html): string {
     }
     $html = str_replace(['assets/app.js?v=4','assets/app.js?v=5','assets/app.js?v=6','assets/app.js?v=7'], 'assets/app.js?v=8', $html);
     $html = str_replace(['assets/style.css"','assets/style.css?v=4"'], 'assets/style.css?v=5"', $html);
+    $html = str_replace(
+        ['<article class="feature"><div class="number">1</div>','<article class="feature"><div class="number">2</div>','<article class="feature"><div class="number">3</div>'],
+        ['<article class="feature feature-create"><div class="feature-top"><div class="number"><span>Step</span>1</div><div class="feature-icon" aria-hidden="true"><i></i></div></div>','<article class="feature feature-scan"><div class="feature-top"><div class="number"><span>Step</span>2</div><div class="feature-icon" aria-hidden="true"><i></i></div></div>','<article class="feature feature-gallery"><div class="feature-top"><div class="number"><span>Step</span>3</div><div class="feature-icon" aria-hidden="true"><i></i></div></div>'],
+        $html
+    );
     if (str_contains($html, 'id="guest-link"') && isset($_GET['token']) && ($currentUser = user())) {
         $currentEvent = event_for_owner_token((string)$_GET['token'], (int)$currentUser['id']);
         $eventId = (int)($currentEvent['id'] ?? 0);
@@ -40,7 +45,7 @@ ob_start(static function (string $html): string {
     }
     return str_replace(
         ['</head>','</body>'],
-        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=15"><link rel="stylesheet" href="assets/hero.css?v=1"><link rel="stylesheet" href="assets/dashboard.css?v=2"><link rel="stylesheet" href="assets/reel.css?v=2"></head>','<script src="assets/reel.js?v=2"></script><script src="assets/gallery.js?v=14"></script><script src="assets/presentation-qr.js?v=1"></script></body>'],
+        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=15"><link rel="stylesheet" href="assets/hero.css?v=1"><link rel="stylesheet" href="assets/dashboard.css?v=2"><link rel="stylesheet" href="assets/reel.css?v=2"><link rel="stylesheet" href="assets/how.css?v=1"></head>','<script src="assets/reel.js?v=2"></script><script src="assets/gallery.js?v=14"></script><script src="assets/presentation-qr.js?v=1"></script></body>'],
         $html
     );
 });
