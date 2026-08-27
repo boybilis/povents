@@ -20,6 +20,7 @@ CREATE TABLE events (
   location VARCHAR(190) NULL,
   token CHAR(32) NOT NULL UNIQUE,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
+  reels_created TINYINT UNSIGNED NOT NULL DEFAULT 0,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_events_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_events_user (user_id)

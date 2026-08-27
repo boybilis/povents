@@ -30,7 +30,8 @@ ob_start(static function (string $html): string {
         $eventTitle = htmlspecialchars((string)($currentEvent['title'] ?? ''), ENT_QUOTES, 'UTF-8');
         $eventDate = !empty($currentEvent['event_date']) ? date('F j, Y', strtotime((string)$currentEvent['event_date'])) : '';
         $eventTime = !empty($currentEvent['start_time']) ? date('g:i A', strtotime((string)$currentEvent['start_time'])).' – '.date('g:i A', strtotime((string)$currentEvent['end_time'])) : '';
-        $downloadButton = '<p class="event-downloads"><button class="button light presentation-qr-create" type="button" data-event-id="'.$eventId.'" data-event-title="'.$eventTitle.'" data-event-date="'.htmlspecialchars($eventDate,ENT_QUOTES,'UTF-8').'" data-event-time="'.htmlspecialchars($eventTime,ENT_QUOTES,'UTF-8').'">Create Presentation QR</button></p>';
+        $reelsCreated = min(3, max(0, (int)($currentEvent['reels_created'] ?? 0)));
+        $downloadButton = '<p class="event-downloads"><button class="button light presentation-qr-create" type="button" data-event-id="'.$eventId.'" data-event-title="'.$eventTitle.'" data-event-date="'.htmlspecialchars($eventDate,ENT_QUOTES,'UTF-8').'" data-event-time="'.htmlspecialchars($eventTime,ENT_QUOTES,'UTF-8').'" data-reels-created="'.$reelsCreated.'">Create Presentation QR</button></p>';
         $html = preg_replace('~(<div class="copyline">.*?</div>)~s', '$1'.$downloadButton, $html, 1) ?? $html;
         if (is_file(album_storage_path($eventId)) && !str_contains($html, 'class="gallery"')) {
             $archivedAlbum = '<section class="card archived-album"><div><div class="eyebrow">Saved event album</div><h2>Photo album archive</h2><p class="muted">The original event photos have expired. Your last generated offline album remains available.</p></div><div class="actions"><a class="button" href="?action=download_photo_album&amp;event_id='.$eventId.'">Download photo album</a><button class="button light album-share" type="button" data-event-id="'.$eventId.'">Copy shareable album link</button></div></section>';
@@ -39,7 +40,7 @@ ob_start(static function (string $html): string {
     }
     return str_replace(
         ['</head>','</body>'],
-        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=15"><link rel="stylesheet" href="assets/hero.css?v=1"><link rel="stylesheet" href="assets/dashboard.css?v=2"><link rel="stylesheet" href="assets/reel.css?v=1"></head>','<script src="assets/reel.js?v=1"></script><script src="assets/gallery.js?v=13"></script><script src="assets/presentation-qr.js?v=1"></script></body>'],
+        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=15"><link rel="stylesheet" href="assets/hero.css?v=1"><link rel="stylesheet" href="assets/dashboard.css?v=2"><link rel="stylesheet" href="assets/reel.css?v=2"></head>','<script src="assets/reel.js?v=2"></script><script src="assets/gallery.js?v=14"></script><script src="assets/presentation-qr.js?v=1"></script></body>'],
         $html
     );
 });
@@ -152,6 +153,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('error',$e->getMessage());
         }
         go(organizer_event_url($event));
+    }
+    if ($action === 'claim_reel') {
+        header('Content-Type: application/json');
+        $u=require_user(); $event=event_for_owner((int)($_POST['event_id']??0),(int)$u['id']);
+        if(!$event){http_response_code(404);echo json_encode(['error'=>'Event not found.']);exit;}
+        $claim=db()->prepare('UPDATE events SET reels_created=reels_created+1 WHERE id=? AND user_id=? AND reels_created<3');
+        $claim->execute([$event['id'],$u['id']]);
+        if($claim->rowCount()!==1){http_response_code(409);echo json_encode(['error'=>'All three included reels for this event have already been created.']);exit;}
+        $remaining=db()->prepare('SELECT GREATEST(0,3-reels_created) FROM events WHERE id=?');$remaining->execute([$event['id']]);
+        echo json_encode(['ok'=>true,'remaining'=>(int)$remaining->fetchColumn()]);exit;
     }
     if ($action === 'download_zip') {
         $u=require_user(); $event=event_for_owner((int)($_POST['event_id']??0),(int)$u['id']);
@@ -403,7 +414,7 @@ if ($page === 'home'): ?>
 <?php elseif ($page === 'register' || $page === 'login'): $register=$page==='register'; ?>
 <main class="shell auth-wrap"><section class="card auth"><div class="eyebrow"><?=$register?'Your story starts here':'Welcome back'?></div><h1><?=$register?'Create account':'Log in'?></h1><form method="post" action="?action=<?=$page?>"><?php if($register): ?><div class="field"><label for="name">Your name</label><input id="name" name="name" required autocomplete="name"></div><?php endif; ?><div class="field"><label for="email">Email address</label><input id="email" name="email" type="email" required autocomplete="email"></div><div class="field"><label for="password">Password</label><input id="password" name="password" type="password" required minlength="8" autocomplete="<?=$register?'new-password':'current-password'?>"></div><?php if(!$register): ?><p style="text-align:right;margin:-5px 0 15px"><a href="?page=forgot-password">Forgot password?</a></p><?php endif; ?><input type="hidden" name="csrf" value="<?=csrf()?>"><button class="full" type="submit"><?=$register?'Continue to plan':'Log in'?></button></form><p class="muted"><?=$register?'Already have an account? <a href="?page=login">Log in</a>':'New here? <a href="?page=register">Create an account</a>'?></p></section></main>
 <?php elseif ($page === 'subscribe'): $u=require_user(); ?>
-<main class="shell auth-wrap"><section class="card auth"><div class="eyebrow">One-event pass</div><h1>One event. Every perspective.</h1><p class="lead">Create one event and collect its guest photos in a private gallery.</p><div style="font-size:46px;font-weight:850;margin:22px 0">₱<?=number_format(cfg('plan_price_centavos')/100)?> <small class="muted" style="font-size:16px">/ event</small></div><form method="post" action="?action=subscribe"><input type="hidden" name="csrf" value="<?=csrf()?>"><button class="full"><?=local_payment_bypass()?'Add local event pass':'Buy event pass with QRPh'?></button></form><?php if(local_payment_bypass()): ?><p class="alert" style="font-size:13px"><strong>Local testing:</strong> Payment is bypassed and no charge will be made.</p><?php else: ?><p class="muted" style="font-size:13px">Each confirmed payment adds one event pass. Scan using a supported Philippine banking or e-wallet app.</p><?php endif; ?></section></main>
+<main class="shell auth-wrap"><section class="card auth"><div class="eyebrow">One-event pass</div><h1>One event. Every perspective.</h1><p class="lead">Create one event and collect its guest photos in a private gallery.</p><div style="font-size:46px;font-weight:850;margin:22px 0">₱<?=number_format(cfg('plan_price_centavos')/100)?> <small class="muted" style="font-size:16px">/ event</small></div><div class="alert" style="font-size:14px"><strong>Included:</strong> Three downloadable 30-second video reels, each using 20 selected event photos.</div><form method="post" action="?action=subscribe"><input type="hidden" name="csrf" value="<?=csrf()?>"><button class="full"><?=local_payment_bypass()?'Add local event pass':'Buy event pass with QRPh'?></button></form><?php if(local_payment_bypass()): ?><p class="alert" style="font-size:13px"><strong>Local testing:</strong> Payment is bypassed and no charge will be made.</p><?php else: ?><p class="muted" style="font-size:13px">Each confirmed payment adds one event pass. Scan using a supported Philippine banking or e-wallet app.</p><?php endif; ?></section></main>
 <?php elseif ($page === 'payment-return'): $u=require_user(); refresh_user((int)$u['id']); ?>
 <main class="shell auth-wrap"><section class="card auth"><div class="eyebrow">Payment received</div><h1>We’re confirming it.</h1><p class="lead">PayMongo will confirm your payment securely. Your Creator plan activates automatically, usually within a few seconds.</p><a class="button full" href="?page=dashboard">Check my plan</a></section></main>
 <?php elseif ($page === 'dashboard'): $u=require_user(); $s=db()->prepare('SELECT e.*,COUNT(p.id) photos FROM events e LEFT JOIN photos p ON p.event_id=e.id WHERE e.user_id=? GROUP BY e.id ORDER BY e.created_at DESC');$s->execute([$u['id']]);$events=$s->fetchAll();$photos=array_sum(array_column($events,'photos')); ?>
