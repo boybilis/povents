@@ -22,7 +22,7 @@ ob_start(static function (string $html): string {
         $albumNotice = '<strong>Save your photo album:</strong> The earliest photos expire $1 and will be permanently erased. Create the photo album at least once before this deadline so a saved album remains available after the original images are deleted. <a class="album-notice-create" href="#gallery-download"><strong>Create Photo Album now</strong></a>';
         $html = preg_replace('~<strong>7-day storage:</strong> The earliest photos expire (.*?)\. Download originals before they are permanently erased\.~', $albumNotice, $html, 1) ?? $html;
     }
-    $html = str_replace(['assets/app.js?v=4','assets/app.js?v=5','assets/app.js?v=6','assets/app.js?v=7'], 'assets/app.js?v=8', $html);
+    $html = str_replace(['assets/app.js?v=4','assets/app.js?v=5','assets/app.js?v=6','assets/app.js?v=7','assets/app.js?v=8'], 'assets/app.js?v=9', $html);
     $html = str_replace('assets/responsive.css?v=15', 'assets/responsive.css?v=16', $html);
     $html = str_replace(['assets/style.css"','assets/style.css?v=4"'], 'assets/style.css?v=5"', $html);
     $html = str_replace(
@@ -388,7 +388,10 @@ if ($page === 'capture') {
             : 'This event is already done. Photo uploads are now closed.';
         ?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title><?=e($event['title'])?> · POVents</title><link rel="stylesheet" href="assets/style.css"></head><body class="camera-page"><main class="camera-shell" style="min-height:100vh;display:grid;place-items:center"><section class="card" style="text-align:center;color:#17231f"><div class="eyebrow"><?=e($event['title'])?></div><h1 style="font-size:48px;letter-spacing:-2px"><?=$dayStatus==='upcoming'?'Not yet!':'That’s a wrap.'?></h1><p class="lead"><?=e($message)?></p></section></main></body></html><?php exit;
     }
-    $sid=$_SESSION['capture'][$token] ?? null; $count=0; $validSession=false;
+    $deviceCookie='povents_guest_'.substr($token,0,12);
+    $cookieSid=preg_replace('/[^a-f0-9]/','',strtolower((string)($_COOKIE[$deviceCookie]??'')));
+    if(strlen($cookieSid)!==32)$cookieSid=null;
+    $sid=$cookieSid ?: ($_SESSION['capture'][$token] ?? null); $count=0; $validSession=false;
     if ($sid) {
         $s=db()->prepare('SELECT photo_count FROM capture_sessions WHERE id=? AND event_id=? AND expires_at>NOW()');
         $s->execute([$sid,$event['id']]);
@@ -396,14 +399,21 @@ if ($page === 'capture') {
         if ($storedCount !== false) { $count=(int)$storedCount; $validSession=true; }
     }
     if (!$validSession) {
+        if(empty($_GET['device_ready'])){
+            $readyUrl='?page=capture&token='.rawurlencode($token).'&device_ready=1';
+            ?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title><?=e($event['title'])?> · POVents</title><link rel="stylesheet" href="assets/style.css"></head><body class="camera-page"><main class="camera-shell" style="min-height:100vh;display:grid;place-items:center"><section class="card" style="text-align:center;color:#17231f"><img class="message-logo" src="assets/povents-logo.png?v=5" alt="POVents"><div class="eyebrow"><?=e($event['title'])?></div><h1>Preparing your camera</h1><p class="lead">Restoring your guest photo session…</p></section></main><script>(()=>{const key=<?=json_encode('povents_guest_'.$token)?>,cookie=<?=json_encode($deviceCookie)?>,next=<?=json_encode($readyUrl)?>;try{const saved=localStorage.getItem(key);if(saved&&/^[a-f0-9]{32}$/.test(saved)){document.cookie=`${cookie}=${saved}; path=/; SameSite=Lax`;}}catch(e){}location.replace(next);})();</script></body></html><?php exit;
+        }
         $guestScanLimit=max(0,(int)($event['max_guest_scans']??50));
         if($guestScanLimit>0){$scanCount=db()->prepare('SELECT COUNT(*) FROM capture_sessions WHERE event_id=?');$scanCount->execute([$event['id']]);if((int)$scanCount->fetchColumn()>=$guestScanLimit){http_response_code(410);exit('This event has reached its guest scan limit.');}}
         $sid=bin2hex(random_bytes(16));
-        db()->prepare('INSERT INTO capture_sessions(id,event_id,expires_at) VALUES(?,?,DATE_ADD(NOW(),INTERVAL 2 HOUR))')->execute([$sid,$event['id']]);
+        $sessionExpires=(new DateTimeImmutable($event['event_date'].' '.$event['end_time']))->format('Y-m-d H:i:s');
+        db()->prepare('INSERT INTO capture_sessions(id,event_id,expires_at) VALUES(?,?,?)')->execute([$sid,$event['id'],$sessionExpires]);
         $_SESSION['capture'][$token]=$sid; $count=0;
     }
+    $eventEndTimestamp=(new DateTimeImmutable($event['event_date'].' '.$event['end_time']))->getTimestamp();
+    setcookie($deviceCookie,(string)$sid,['expires'=>$eventEndTimestamp,'path'=>'/','secure'=>(!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off'),'httponly'=>false,'samesite'=>'Lax']);
     $photoLimit=max(1,(int)($event['max_photos_per_session']??cfg('max_photos_per_session')));
-    ?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="csrf-token" content="<?=csrf()?>"><title><?=e($event['title'])?> · POVents</title><link rel="stylesheet" href="assets/style.css?v=4"></head><body class="camera-page"><main class="camera-shell"><div class="camera-top"><span class="brand"><i></i>POVents</span><span><?=e($event['title'])?></span></div><section class="camera" data-camera data-token="<?=e($token)?>" data-remaining="<?=$photoLimit-$count?>"><video autoplay playsinline muted></video><canvas></canvas><input type="file" data-file-camera accept="image/*" capture="environment" hidden><div class="camera-controls"><button class="switch" data-switch aria-label="Switch camera">↻</button><button class="shutter" data-capture aria-label="Take a photo"></button></div></section><p class="capture-status" data-status>Preparing camera…</p><div class="strip" data-strip></div><p class="muted" style="text-align:center">Capture up to <?=$photoLimit?> candid moments from your point of view.</p></main><script src="assets/app.js?v=4"></script></body></html><?php exit;
+    ?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="csrf-token" content="<?=csrf()?>"><title><?=e($event['title'])?> · POVents</title><link rel="stylesheet" href="assets/style.css?v=4"></head><body class="camera-page"><main class="camera-shell"><div class="camera-top"><span class="brand"><i></i>POVents</span><span><?=e($event['title'])?></span></div><section class="camera" data-camera data-token="<?=e($token)?>" data-session-id="<?=e((string)$sid)?>" data-session-cookie="<?=e($deviceCookie)?>" data-remaining="<?=$photoLimit-$count?>"><video autoplay playsinline muted></video><canvas></canvas><input type="file" data-file-camera accept="image/*" capture="environment" hidden><div class="camera-controls"><button class="switch" data-switch aria-label="Switch camera">↻</button><button class="shutter" data-capture aria-label="Take a photo"></button></div></section><p class="capture-status" data-status>Preparing camera…</p><div class="strip" data-strip></div><p class="muted" style="text-align:center">Capture up to <?=$photoLimit?> candid moments from your point of view.</p></main><script src="assets/app.js?v=4"></script></body></html><?php exit;
 }
 
 function header_html(string $title='POVents'): void { $u=user(); $f=pull_flash(); ?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="<?=csrf()?>"><title><?=e($title)?> · POVents</title><meta name="description" content="Collect every guest's point of view through one event QR code."><link rel="stylesheet" href="assets/style.css"></head><body><?php if($f): ?><div hidden data-toast-type="<?=e($f['type'])?>" data-toast-message="<?=e($f['message'])?>"></div><?php endif; ?><header class="shell nav"><a class="brand" href="?"><i></i>POVents</a><nav class="navlinks"><?php if($u): ?><a href="?page=dashboard">My events</a><?php if(is_admin($u)): ?><a class="admin-nav" href="?page=admin-settings">Admin settings</a><?php endif; ?><form method="post" action="?action=logout"><input type="hidden" name="csrf" value="<?=csrf()?>"><button class="button light">Log out</button></form><?php else: ?><a href="?page=login">Log in</a><a class="button" href="?page=register">Start creating</a><?php endif; ?></nav></header><?php }

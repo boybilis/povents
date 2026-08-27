@@ -1,6 +1,13 @@
 (() => {
   const camera = document.querySelector('[data-camera]');
   if (!camera) return;
+  const guestSessionId = camera.dataset.sessionId || '';
+  const guestSessionCookie = camera.dataset.sessionCookie || '';
+  const eventToken = camera.dataset.token || '';
+  if (/^[a-f0-9]{32}$/.test(guestSessionId) && eventToken) {
+    try { localStorage.setItem(`povents_guest_${eventToken}`, guestSessionId); } catch (error) {}
+    if (guestSessionCookie) document.cookie = `${guestSessionCookie}=${guestSessionId}; path=/; SameSite=Lax`;
+  }
   const video = camera.querySelector('video');
   const canvas = camera.querySelector('canvas');
   const capture = camera.querySelector('[data-capture]');
