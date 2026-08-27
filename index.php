@@ -410,6 +410,7 @@ if ($page === 'capture') {
         db()->prepare('INSERT INTO capture_sessions(id,event_id,expires_at) VALUES(?,?,?)')->execute([$sid,$event['id'],$sessionExpires]);
         $_SESSION['capture'][$token]=$sid; $count=0;
     }
+    $_SESSION['capture'][$token]=(string)$sid;
     $eventEndTimestamp=(new DateTimeImmutable($event['event_date'].' '.$event['end_time']))->getTimestamp();
     setcookie($deviceCookie,(string)$sid,['expires'=>$eventEndTimestamp,'path'=>'/','secure'=>(!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off'),'httponly'=>false,'samesite'=>'Lax']);
     $photoLimit=max(1,(int)($event['max_photos_per_session']??cfg('max_photos_per_session')));
