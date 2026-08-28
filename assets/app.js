@@ -12,6 +12,7 @@
   const canvas = camera.querySelector('canvas');
   const capture = camera.querySelector('[data-capture]');
   const switchButton = camera.querySelector('[data-switch]');
+  const orientationButton = camera.querySelector('[data-orientation]');
   const status = document.querySelector('[data-status]');
   const strip = document.querySelector('[data-strip]');
   const fileCamera = camera.querySelector('[data-file-camera]');
@@ -44,6 +45,7 @@
   Object.assign(strip.style, {display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', overflow: 'visible'});
   const token = camera.dataset.token;
   let facingMode = 'environment';
+  let captureOrientation = 'portrait';
   let stream;
   let imageCapture = null;
   let remaining = Number(camera.dataset.remaining || 5);
@@ -51,6 +53,7 @@
   let nativeCapture = false;
   const maxPhotoBytes = 1536 * 1024;
   let pendingPhoto = null;
+  let pendingOrientation = 'portrait';
   let pendingPreviewUrl = '';
   let previewTimer = null;
   let cameraRequestId = 0;
@@ -152,10 +155,11 @@
     return await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 1));
   }
 
-  async function addWatermark(blob, caption) {
+  async function addWatermark(blob, caption, orientation) {
     await watermarkLogoReady;
     const bitmap = await createImageBitmap(blob);
-    const targetRatio = bitmap.width >= bitmap.height ? 4 / 3 : 3 / 4;
+    const portrait = orientation !== 'landscape';
+    const targetRatio = portrait ? 3 / 4 : 4 / 3;
     const sourceRatio = bitmap.width / bitmap.height;
     let sourceX = 0;
     let sourceY = 0;
@@ -168,7 +172,6 @@
       sourceHeight = bitmap.width / targetRatio;
       sourceY = (bitmap.height - sourceHeight) / 2;
     }
-    const portrait = bitmap.height > bitmap.width;
     canvas.width = portrait ? 768 : 1024;
     canvas.height = portrait ? 1024 : 768;
     const context = canvas.getContext('2d');
@@ -246,9 +249,10 @@
     }
   }
 
-  function review(blob, caption = '') {
+  function review(blob, caption = '', orientation = captureOrientation) {
     clearTimeout(previewTimer);
     pendingPhoto = blob;
+    pendingOrientation = orientation;
     if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
     pendingPreviewUrl = URL.createObjectURL(blob);
     lastPhoto.src = pendingPreviewUrl;
@@ -295,10 +299,11 @@
     finishReview(true);
     setStatus('Adding watermark…');
     let watermarkedPhoto;
-    try { watermarkedPhoto = await addWatermark(approvedPhoto, caption); }
+    const approvedOrientation = pendingOrientation;
+    try { watermarkedPhoto = await addWatermark(approvedPhoto, caption, approvedOrientation); }
     catch (error) {
       if (approvedPreviewUrl) URL.revokeObjectURL(approvedPreviewUrl);
-      review(approvedPhoto, caption);
+      review(approvedPhoto, caption, approvedOrientation);
       setStatus(error.message || 'Could not add the watermark. Please try again.', true);
       return;
     }
@@ -308,7 +313,7 @@
       if (approvedPreviewUrl) URL.revokeObjectURL(approvedPreviewUrl);
     } catch (error) {
       if (approvedPreviewUrl) URL.revokeObjectURL(approvedPreviewUrl);
-      review(approvedPhoto, caption);
+      review(approvedPhoto, caption, approvedOrientation);
       const message = error.message || 'The approved photo could not be uploaded.';
       setStatus(message, true);
       window.POVentsToast?.(message, 'error', 7000);
@@ -359,6 +364,19 @@
     facingMode = facingMode === 'environment' ? 'user' : 'environment';
     start();
   });
+  function applyCaptureOrientation(announce = false) {
+    const landscape = captureOrientation === 'landscape';
+    camera.style.aspectRatio = landscape ? '4 / 3' : '3 / 4';
+    orientationButton.textContent = landscape ? '▯' : '▭';
+    orientationButton.setAttribute('aria-label', landscape ? 'Switch to portrait photo' : 'Switch to landscape photo');
+    orientationButton.title = landscape ? 'Landscape photo selected' : 'Portrait photo selected';
+    if (announce) setStatus(`${landscape ? 'Landscape' : 'Portrait'} photo selected · ${remaining} remaining`);
+  }
+  orientationButton?.addEventListener('click', () => {
+    captureOrientation = captureOrientation === 'portrait' ? 'landscape' : 'portrait';
+    applyCaptureOrientation(true);
+  });
+  applyCaptureOrientation(false);
   window.addEventListener('pagehide', () => {
     cameraRequestId++;
     if (stream) stream.getTracks().forEach(track => track.stop());
