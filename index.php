@@ -22,9 +22,9 @@ ob_start(static function (string $html): string {
         $albumNotice = '<strong>Save your photo album:</strong> The earliest photos expire $1 and will be permanently erased. Create the photo album at least once before this deadline so a saved album remains available after the original images are deleted. <a class="album-notice-create" href="#gallery-download"><strong>Create Photo Album now</strong></a>';
         $html = preg_replace('~<strong>7-day storage:</strong> The earliest photos expire (.*?)\. Download originals before they are permanently erased\.~', $albumNotice, $html, 1) ?? $html;
     }
-    $html = str_replace(['assets/app.js?v=4','assets/app.js?v=5','assets/app.js?v=6','assets/app.js?v=7','assets/app.js?v=8','assets/app.js?v=9','assets/app.js?v=10','assets/app.js?v=11','assets/app.js?v=12','assets/app.js?v=13','assets/app.js?v=14','assets/app.js?v=15','assets/app.js?v=16'], 'assets/app.js?v=17', $html);
+    $html = str_replace(['assets/app.js?v=4','assets/app.js?v=5','assets/app.js?v=6','assets/app.js?v=7','assets/app.js?v=8','assets/app.js?v=9','assets/app.js?v=10','assets/app.js?v=11','assets/app.js?v=12','assets/app.js?v=13','assets/app.js?v=14','assets/app.js?v=15','assets/app.js?v=16','assets/app.js?v=17'], 'assets/app.js?v=18', $html);
     $html = str_replace('<button class="switch" data-switch aria-label="Switch camera">↻</button><button class="shutter" data-capture aria-label="Take a photo"></button>', '<button class="switch orientation-switch" data-orientation aria-label="Switch to landscape photo">▭</button><button class="shutter" data-capture aria-label="Take a photo"></button><button class="switch" data-switch aria-label="Switch camera">↻</button>', $html);
-    $html = str_replace('assets/responsive.css?v=15', 'assets/responsive.css?v=16', $html);
+    $html = str_replace(['assets/responsive.css?v=15','assets/responsive.css?v=16'], 'assets/responsive.css?v=17', $html);
     $html = str_replace(['assets/style.css"','assets/style.css?v=4"'], 'assets/style.css?v=5"', $html);
     $html = str_replace(
         ['<article class="feature"><div class="number">1</div>','<article class="feature"><div class="number">2</div>','<article class="feature"><div class="number">3</div>'],
@@ -48,7 +48,7 @@ ob_start(static function (string $html): string {
     }
     return str_replace(
         ['</head>','</body>'],
-        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=15"><link rel="stylesheet" href="assets/hero.css?v=1"><link rel="stylesheet" href="assets/dashboard.css?v=2"><link rel="stylesheet" href="assets/reel.css?v=2"><link rel="stylesheet" href="assets/how.css?v=1"><link rel="stylesheet" href="assets/admin.css?v=1"><link rel="stylesheet" href="assets/toast.css?v=1"></head>','<script src="assets/toast.js?v=1"></script><script src="assets/reel.js?v=3"></script><script src="assets/gallery.js?v=16"></script><script src="assets/presentation-qr.js?v=2"></script></body>'],
+        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=17"><link rel="stylesheet" href="assets/hero.css?v=1"><link rel="stylesheet" href="assets/dashboard.css?v=2"><link rel="stylesheet" href="assets/reel.css?v=2"><link rel="stylesheet" href="assets/how.css?v=1"><link rel="stylesheet" href="assets/admin.css?v=1"><link rel="stylesheet" href="assets/toast.css?v=1"></head>','<script src="assets/toast.js?v=1"></script><script src="assets/reel.js?v=3"></script><script src="assets/gallery.js?v=16"></script><script src="assets/presentation-qr.js?v=2"></script></body>'],
         $html
     );
 });

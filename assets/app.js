@@ -16,6 +16,21 @@
   const status = document.querySelector('[data-status]');
   const strip = document.querySelector('[data-strip]');
   const fileCamera = camera.querySelector('[data-file-camera]');
+  const guestViewer = document.createElement('div');
+  guestViewer.className = 'guest-photo-viewer';
+  guestViewer.hidden = true;
+  guestViewer.setAttribute('role', 'dialog');
+  guestViewer.setAttribute('aria-modal', 'true');
+  guestViewer.setAttribute('aria-label', 'Captured photo viewer');
+  guestViewer.innerHTML = '<button type="button" class="guest-photo-viewer__close" aria-label="Close photo viewer">×</button><img alt="Guest captured photo"><p>Your captured photo</p>';
+  document.body.appendChild(guestViewer);
+  const guestViewerImage = guestViewer.querySelector('img');
+  const guestViewerClose = guestViewer.querySelector('button');
+  function closeGuestViewer() { guestViewer.hidden = true; guestViewerImage.removeAttribute('src'); document.body.style.overflow = ''; }
+  function openGuestViewer(source) { guestViewerImage.src = source; guestViewer.hidden = false; document.body.style.overflow = 'hidden'; guestViewerClose.focus(); }
+  guestViewerClose.addEventListener('click', closeGuestViewer);
+  guestViewer.addEventListener('click', event => { if (event.target === guestViewer) closeGuestViewer(); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && !guestViewer.hidden) closeGuestViewer(); });
   const lastPhoto = new Image();
   lastPhoto.alt = 'Most recently captured photo';
   Object.assign(lastPhoto.style, {position: 'absolute', inset: '0', width: '100%', height: '100%', objectFit: 'cover', display: 'none', pointerEvents: 'none', zIndex: '1'});
@@ -241,7 +256,12 @@
       const img = new Image();
       img.src = data.url;
       img.alt = 'Your captured photo';
-      Object.assign(img.style, {width: '100%', height: 'auto', aspectRatio: '1 / 1', objectFit: 'cover', borderRadius: '14px', border: '2px solid #29322e'});
+      img.tabIndex = 0;
+      img.setAttribute('role', 'button');
+      img.setAttribute('aria-label', 'View captured photo full screen');
+      img.addEventListener('click', () => openGuestViewer(data.url));
+      img.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openGuestViewer(data.url); } });
+      Object.assign(img.style, {width: '100%', height: 'auto', aspectRatio: '1 / 1', objectFit: 'cover', borderRadius: '14px', border: '2px solid #29322e', cursor: 'zoom-in'});
       strip.prepend(img);
       galleryTitle.style.display = 'flex';
       setStatus(remaining ? `${remaining} photo${remaining === 1 ? '' : 's'} remaining` : `All ${photoLimit} moments captured — thank you!`);
