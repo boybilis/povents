@@ -176,6 +176,12 @@
     canvas.height = portrait ? 1024 : 768;
     const context = canvas.getContext('2d');
     context.drawImage(bitmap, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
+    if (!caption) {
+      bitmap.close?.();
+      const cleanPhoto = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .96));
+      if (!cleanPhoto) throw new Error('The photo could not be prepared.');
+      return cleanPhoto;
+    }
     const fontSize = Math.max(22, Math.min(54, Math.round(canvas.width * .035)));
     const padding = Math.round(fontSize * .7);
     context.font = `700 ${fontSize}px system-ui, sans-serif`;
@@ -185,22 +191,20 @@
     const maximumLogoWidth = Math.round(canvas.width * .38);
     if (logoWidth > maximumLogoWidth) { logoHeight = Math.round(logoHeight * maximumLogoWidth / logoWidth); logoWidth = maximumLogoWidth; }
     const barHeight = Math.max(logoHeight, fontSize) + padding * 1.5;
-    context.fillStyle = 'rgba(255, 255, 255, .78)';
+    context.fillStyle = 'rgba(3, 28, 21, .86)';
     context.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
     const logoY = canvas.height - barHeight / 2 - logoHeight / 2;
     context.drawImage(watermarkLogo, padding, logoY, logoWidth, logoHeight);
-    if (caption) {
-      context.fillStyle = '#072a20';
-      const captionX = padding + logoWidth + padding;
-      const captionWidth = Math.max(fontSize * 2, canvas.width - captionX - padding);
-      let captionCore = caption;
-      let captionText = `“${captionCore}”`;
-      while (captionCore.length > 1 && context.measureText(captionText).width > captionWidth) {
-        captionCore = captionCore.slice(0, -1);
-        captionText = `“${captionCore}…”`;
-      }
-      context.fillText(captionText, captionX, canvas.height - barHeight / 2);
+    context.fillStyle = '#ffffff';
+    const captionX = padding + logoWidth + padding;
+    const captionWidth = Math.max(fontSize * 2, canvas.width - captionX - padding);
+    let captionCore = caption;
+    let captionText = `“${captionCore}”`;
+    while (captionCore.length > 1 && context.measureText(captionText).width > captionWidth) {
+      captionCore = captionCore.slice(0, -1);
+      captionText = `“${captionCore}…”`;
     }
+    context.fillText(captionText, captionX, canvas.height - barHeight / 2);
     bitmap.close?.();
     const result = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .96));
     if (!result) throw new Error('The caption could not be applied to this photo.');
@@ -264,7 +268,7 @@
     reviewControls.querySelectorAll('button').forEach(button => { button.disabled = false; });
     captionInput.value = caption;
     watermarkPreviewCaption.textContent = caption ? `“${caption}”` : '';
-    watermarkPreview.hidden = false;
+    watermarkPreview.hidden = !caption;
     setStatus('Keep this photo or retake it?');
   }
 
@@ -289,6 +293,7 @@
   captionInput.addEventListener('input', () => {
     captionInput.value = captionInput.value.slice(0, 30);
     watermarkPreviewCaption.textContent = captionInput.value ? `“${captionInput.value}”` : '';
+    watermarkPreview.hidden = !captionInput.value;
   });
 
   reviewControls.querySelector('[data-approve]').addEventListener('click', async () => {
