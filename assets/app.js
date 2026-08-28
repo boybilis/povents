@@ -16,6 +16,7 @@
   const status = document.querySelector('[data-status]');
   const strip = document.querySelector('[data-strip]');
   const fileCamera = camera.querySelector('[data-file-camera]');
+  const phoneCameraButton = camera.querySelector('[data-phone-camera]');
   const guestViewer = document.createElement('div');
   guestViewer.className = 'guest-photo-viewer';
   guestViewer.hidden = true;
@@ -66,6 +67,7 @@
   let remaining = Number(camera.dataset.remaining || 5);
   const photoLimit = Math.max(1, Number(camera.dataset.limit || remaining || 5));
   let nativeCapture = false;
+  let phoneCameraActive = false;
   const maxPhotoBytes = 1536 * 1024;
   let pendingPhoto = null;
   let pendingOrientation = 'portrait';
@@ -91,6 +93,26 @@
     switchButton.style.display = 'none';
     capture.disabled = remaining < 1;
     setStatus(remaining < 1 ? `All ${photoLimit} moments captured — thank you!` : `Tap the shutter to open your phone camera · ${remaining} remaining`);
+  }
+
+  function openPhoneCamera() {
+    if (remaining < 1 || !fileCamera) return;
+    fileCamera.setAttribute('capture', facingMode === 'user' ? 'user' : 'environment');
+    fileCamera.value = '';
+    phoneCameraActive = true;
+    stream?.getVideoTracks().forEach(track => { track.enabled = false; });
+    setStatus(`Opening ${facingMode === 'user' ? 'front' : 'rear'} phone camera…`);
+    fileCamera.click();
+  }
+
+  function resumePreviewAfterPhoneCamera() {
+    if (!phoneCameraActive) return;
+    phoneCameraActive = false;
+    stream?.getVideoTracks().forEach(track => { track.enabled = true; });
+    if (!pendingPhoto && !nativeCapture) {
+      video.play().catch(() => {});
+      setStatus(`${remaining} photo${remaining === 1 ? '' : 's'} remaining`);
+    }
   }
 
   async function start() {
@@ -266,6 +288,7 @@
       galleryTitle.style.display = 'flex';
       setStatus(remaining ? `${remaining} photo${remaining === 1 ? '' : 's'} remaining` : `All ${photoLimit} moments captured — thank you!`);
       capture.disabled = remaining < 1;
+      if (phoneCameraButton) phoneCameraButton.hidden = remaining < 1;
       return true;
     } catch (error) {
       capture.disabled = false;
@@ -282,6 +305,7 @@
     lastPhoto.src = pendingPreviewUrl;
     lastPhoto.style.display = 'block';
     normalControls.style.display = 'none';
+    if (phoneCameraButton) phoneCameraButton.hidden = true;
     reviewControls.hidden = false;
     reviewControls.style.display = 'grid';
     reviewControls.style.pointerEvents = 'auto';
@@ -301,6 +325,7 @@
     reviewControls.style.pointerEvents = 'none';
     watermarkPreview.hidden = true;
     normalControls.style.display = 'flex';
+    if (phoneCameraButton) phoneCameraButton.hidden = remaining < 1;
     if (!keepPreview) lastPhoto.style.display = 'none';
   }
 
@@ -348,14 +373,12 @@
   capture.addEventListener('click', async () => {
     if (remaining < 1) return;
     if (nativeCapture) {
-      fileCamera.value = '';
-      fileCamera.click();
+      openPhoneCamera();
       return;
     }
     if (!video.videoWidth) {
       useNativeCamera();
-      fileCamera.value = '';
-      fileCamera.click();
+      openPhoneCamera();
       return;
     }
     capture.disabled = true;
@@ -382,6 +405,12 @@
       review(photo);
     }
     fileCamera.value = '';
+    resumePreviewAfterPhoneCamera();
+  });
+
+  phoneCameraButton?.addEventListener('click', openPhoneCamera);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) window.setTimeout(resumePreviewAfterPhoneCamera, 250);
   });
 
   switchButton?.addEventListener('click', () => {
