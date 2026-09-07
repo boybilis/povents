@@ -1,3 +1,0 @@
-ALTER TABLE events
-  ADD COLUMN start_time TIME NOT NULL DEFAULT '00:00:00' AFTER event_date,
-  ADD COLUMN end_time TIME NOT NULL DEFAULT '23:59:59' AFTER start_time;

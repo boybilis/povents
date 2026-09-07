@@ -1,2 +1,0 @@
-ALTER TABLE events
-  ADD COLUMN reels_created TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER is_active;
