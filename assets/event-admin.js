@@ -4,6 +4,16 @@
   const cancelButton = document.querySelector('[data-delete-event-cancel]');
   if (!dialog || !openButton || !cancelButton) return;
 
+  const eventHeading = document.querySelector('.dash-head');
+  const photoCount = eventHeading?.querySelector(':scope > strong');
+  if (eventHeading && photoCount) {
+    const actions = document.createElement('div');
+    actions.className = 'event-heading-actions';
+    photoCount.replaceWith(actions);
+    actions.append(photoCount, openButton);
+    document.querySelector('.event-admin-danger')?.remove();
+  }
+
   openButton.addEventListener('click', () => {
     if (typeof dialog.showModal === 'function') dialog.showModal();
     else dialog.setAttribute('open', '');

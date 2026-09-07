@@ -48,7 +48,7 @@ ob_start(static function (string $html): string {
     }
     return str_replace(
         ['</head>','</body>'],
-        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=19"><link rel="stylesheet" href="assets/hero.css?v=1"><link rel="stylesheet" href="assets/dashboard.css?v=2"><link rel="stylesheet" href="assets/reel.css?v=2"><link rel="stylesheet" href="assets/how.css?v=1"><link rel="stylesheet" href="assets/admin.css?v=1"><link rel="stylesheet" href="assets/toast.css?v=1"><link rel="stylesheet" href="assets/event-admin.css?v=1"></head>','<script src="assets/toast.js?v=1"></script><script src="assets/reel.js?v=3"></script><script src="assets/gallery.js?v=16"></script><script src="assets/presentation-qr.js?v=2"></script><script src="assets/event-admin.js?v=1"></script></body>'],
+        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=19"><link rel="stylesheet" href="assets/hero.css?v=1"><link rel="stylesheet" href="assets/dashboard.css?v=2"><link rel="stylesheet" href="assets/reel.css?v=2"><link rel="stylesheet" href="assets/how.css?v=1"><link rel="stylesheet" href="assets/admin.css?v=1"><link rel="stylesheet" href="assets/toast.css?v=1"><link rel="stylesheet" href="assets/event-admin.css?v=2"></head>','<script src="assets/toast.js?v=1"></script><script src="assets/reel.js?v=3"></script><script src="assets/gallery.js?v=16"></script><script src="assets/presentation-qr.js?v=2"></script><script src="assets/event-admin.js?v=2"></script></body>'],
         $html
     );
 });
