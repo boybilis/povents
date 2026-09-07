@@ -48,7 +48,7 @@ ob_start(static function (string $html): string {
     }
     return str_replace(
         ['</head>','</body>'],
-        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=19"><link rel="stylesheet" href="assets/hero.css?v=1"><link rel="stylesheet" href="assets/dashboard.css?v=2"><link rel="stylesheet" href="assets/reel.css?v=2"><link rel="stylesheet" href="assets/how.css?v=1"><link rel="stylesheet" href="assets/admin.css?v=1"><link rel="stylesheet" href="assets/toast.css?v=1"></head>','<script src="assets/toast.js?v=1"></script><script src="assets/reel.js?v=3"></script><script src="assets/gallery.js?v=16"></script><script src="assets/presentation-qr.js?v=2"></script></body>'],
+        ['<link rel="icon" href="assets/povents-logo.png?v=5"><link rel="stylesheet" href="assets/responsive.css?v=19"><link rel="stylesheet" href="assets/hero.css?v=1"><link rel="stylesheet" href="assets/dashboard.css?v=2"><link rel="stylesheet" href="assets/reel.css?v=2"><link rel="stylesheet" href="assets/how.css?v=1"><link rel="stylesheet" href="assets/admin.css?v=1"><link rel="stylesheet" href="assets/toast.css?v=1"><link rel="stylesheet" href="assets/event-admin.css?v=1"></head>','<script src="assets/toast.js?v=1"></script><script src="assets/reel.js?v=3"></script><script src="assets/gallery.js?v=16"></script><script src="assets/presentation-qr.js?v=2"></script><script src="assets/event-admin.js?v=1"></script></body>'],
         $html
     );
 });
@@ -362,6 +362,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         else{$slug=preg_replace('/[^a-z0-9]+/','-',strtolower($name)).'-'.bin2hex(random_bytes(3));db()->prepare('INSERT INTO pricing_plans(name,slug,description,price_centavos,passes_per_purchase,max_guest_scans,max_photos_per_session,photo_retention_days,reels_per_event,reels_unlimited,photo_albums_per_event,reel_duration_seconds,reel_image_count,is_active,is_featured,display_order) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute(array_merge([$name,$slug],$values));}
         flash('success',$id?'Pricing plan updated.':'Pricing plan added.');go('?page=admin-settings');
     }
+    if ($action === 'delete_event') {
+        $admin=require_admin();
+        $event=event_for_owner((int)($_POST['event_id']??0),(int)$admin['id']);
+        if(!$event){http_response_code(404);exit('Event not found or you do not own this event.');}
+        db()->beginTransaction();
+        try {
+            $locked=db()->prepare('SELECT id FROM events WHERE id=? AND user_id=? FOR UPDATE');
+            $locked->execute([$event['id'],$admin['id']]);
+            if(!$locked->fetchColumn()) throw new RuntimeException('This event is no longer available.');
+            remove_event_storage((int)$event['id']);
+            db()->prepare('DELETE FROM events WHERE id=? AND user_id=?')->execute([$event['id'],$admin['id']]);
+            db()->commit();
+            flash('success','The event, all captured images, and its saved photo album were permanently deleted.');
+        } catch(Throwable $e) {
+            if(db()->inTransaction()) db()->rollBack();
+            flash('error',$e->getMessage());
+            go(organizer_event_url($event));
+        }
+        go('?page=dashboard');
+    }
     if ($action === 'update_event') {
         $u=require_user(); $event=event_for_owner((int)($_POST['event_id']??0),(int)$u['id']);
         if (!$event) { http_response_code(404); exit('Event not found.'); }
@@ -489,4 +509,5 @@ if ($page === 'home'): ?>
 <?php elseif ($page === 'event'): $u=require_user();$event=event_for_owner_token((string)($_GET['token']??''),(int)$u['id']);if(!$event){http_response_code(404);echo '<main class="shell empty">Event not found.</main>';}else{$s=db()->prepare('SELECT * FROM photos WHERE event_id=? AND expires_at>NOW() ORDER BY created_at DESC');$s->execute([$event['id']]);$photos=$s->fetchAll();$guest=url('?page=capture&token='.$event['token']);$qr='https://api.qrserver.com/v1/create-qr-code/?size=520x520&data='.rawurlencode($guest);$soonest=$photos?min(array_map(fn($p)=>strtotime($p['expires_at']),$photos)):null; ?>
 <main class="shell"><div class="dash-head"><div><a class="muted" href="?page=dashboard">← All events</a><h1><?=e($event['title'])?></h1><p class="muted"><?=e($event['event_date']?:'Date not set')?> · <?=e($event['location']?:'Location not set')?></p></div><strong><?=count($photos)?> photos</strong></div><section class="card qr-panel"><img src="<?=e($qr)?>" alt="Guest camera QR code"><div><div class="eyebrow">Guest camera link</div><h2>Print it. Place it. Let guests shoot.</h2><p class="muted">Each new scan opens the camera and allows up to five photo uploads.</p><div class="copyline"><input id="guest-link" readonly value="<?=e($guest)?>"><button type="button" onclick="navigator.clipboard.writeText(document.getElementById('guest-link').value);this.textContent='Copied!'">Copy</button></div><p><a href="<?=e($guest)?>" target="_blank">Preview guest camera →</a></p></div></section><?php if($soonest): ?><div class="alert" style="margin-top:18px"><strong>7-day storage:</strong> The earliest photos expire <?=date('M j, Y \a\t g:i A',$soonest)?>. Download originals before they are permanently erased.</div><?php endif; ?><section class="section"><div class="section-head"><div><div class="eyebrow">Live gallery</div><h2>Every point of view</h2></div><button class="button light" onclick="location.reload()">Refresh photos</button></div><?php if(!$photos): ?><div class="empty">No photos yet. Share the QR code and watch this gallery come alive.</div><?php else: ?><div class="gallery"><?php foreach($photos as $photo): ?><figure class="shot"><a href="uploads/<?=$event['id']?>/<?=e($photo['file_name'])?>" download><img loading="lazy" src="uploads/<?=$event['id']?>/<?=e($photo['file_name'])?>" alt="Guest photo"></a><time><?=max(1,(int)ceil((strtotime($photo['expires_at'])-time())/86400))?>d left</time></figure><?php endforeach; ?></div><?php endif; ?></section></main>
 <?php if(event_day_status($event)==='upcoming'): ?><a class="button" style="position:fixed;right:24px;bottom:24px;z-index:5" href="<?=e(organizer_event_url($event,true))?>">Edit event</a><?php endif; ?>
+<?php if(is_admin($u)): ?><div class="event-admin-danger"><button class="button event-delete-trigger" type="button" data-delete-event-open>Delete event</button></div><dialog class="event-delete-dialog" data-delete-event-dialog aria-labelledby="delete-event-title"><form method="post" action="?action=delete_event"><div class="eyebrow">Permanent deletion</div><h2 id="delete-event-title">Delete <?=e($event['title'])?>?</h2><p>This permanently removes the event, every captured image, all guest sessions, and the saved photo album from the server. This cannot be undone.</p><input type="hidden" name="event_id" value="<?=$event['id']?>"><input type="hidden" name="csrf" value="<?=csrf()?>"><div class="event-delete-dialog__actions"><button class="button light" type="button" data-delete-event-cancel>Cancel</button><button class="button event-delete-confirm" type="submit">Delete permanently</button></div></form></dialog><?php endif; ?>
 <?php } else: http_response_code(404); ?><main class="shell empty">Page not found.</main><?php endif; footer_html();

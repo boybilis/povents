@@ -224,6 +224,26 @@ function album_storage_path(int $eventId): string {
     return __DIR__.'/albums/event-'.$eventId.'.html';
 }
 
+function remove_event_storage(int $eventId): void {
+    if ($eventId < 1) throw new RuntimeException('Invalid event storage path.');
+    $uploadRoot = __DIR__.'/uploads';
+    $eventDirectory = $uploadRoot.'/'.$eventId;
+    if (is_dir($eventDirectory)) {
+        $items = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($eventDirectory, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($items as $item) {
+            $path = $item->getPathname();
+            $removed = $item->isDir() && !$item->isLink() ? rmdir($path) : unlink($path);
+            if (!$removed) throw new RuntimeException('An event file could not be permanently removed from the server.');
+        }
+        if (!rmdir($eventDirectory)) throw new RuntimeException('The event image folder could not be permanently removed.');
+    }
+    $album = album_storage_path($eventId);
+    if (is_file($album) && !unlink($album)) throw new RuntimeException('The saved photo album could not be permanently removed.');
+}
+
 function album_download_name(array $event): string {
     return preg_replace('/[^A-Za-z0-9_-]+/', '-', trim((string)$event['title'])).'-offline-album.html';
 }
