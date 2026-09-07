@@ -41,6 +41,16 @@ ob_start(static function (string $html): string {
         $reelsCreated = min($reelsAllowed, max(0, (int)($currentEvent['reels_created'] ?? 0)));
         $downloadButton = '<p class="event-downloads"><button class="button light presentation-qr-create" type="button" data-event-id="'.$eventId.'" data-event-title="'.$eventTitle.'" data-event-date="'.htmlspecialchars($eventDate,ENT_QUOTES,'UTF-8').'" data-event-time="'.htmlspecialchars($eventTime,ENT_QUOTES,'UTF-8').'" data-reels-created="'.$reelsCreated.'" data-reels-allowed="'.$reelsAllowed.'" data-reels-unlimited="'.(int)($currentEvent['reels_unlimited'] ?? 0).'" data-reel-duration="'.(int)($currentEvent['reel_duration_seconds'] ?? 30).'" data-reel-images="'.(int)($currentEvent['reel_image_count'] ?? 20).'">Create Presentation QR</button></p>';
         $html = preg_replace('~(<div class="copyline">.*?</div>)~s', '$1'.$downloadButton, $html, 1) ?? $html;
+        if (is_admin($currentUser) && preg_match('~<div class="event-admin-danger">\s*(<button[^>]*data-delete-event-open[^>]*>.*?</button>)\s*</div>~s', $html, $deleteMatch)) {
+            $deleteButton = $deleteMatch[1];
+            $html = str_replace($deleteMatch[0], '', $html);
+            $html = preg_replace_callback(
+                '~(<div class="dash-head">.*?</div>)(<strong>\d+ photos</strong>)(</div><section class="card qr-panel">)~s',
+                static fn(array $match): string => $match[1].'<div class="event-heading-actions">'.$match[2].$deleteButton.'</div>'.$match[3],
+                $html,
+                1
+            ) ?? $html;
+        }
         if (is_file(album_storage_path($eventId)) && !str_contains($html, 'class="gallery"')) {
             $archivedAlbum = '<section class="card archived-album"><div><div class="eyebrow">Saved event album</div><h2>Photo album archive</h2><p class="muted">The original event photos have expired. Your last generated offline album remains available.</p></div><div class="actions"><a class="button" href="?action=download_photo_album&amp;event_id='.$eventId.'">Download photo album</a><button class="button light album-share" type="button" data-event-id="'.$eventId.'">Copy shareable album link</button></div></section>';
             $html = preg_replace('~<div class="empty">No photos yet\..*?</div>~s', $archivedAlbum, $html, 1) ?? $html;
