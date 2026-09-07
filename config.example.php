@@ -1,7 +1,7 @@
 <?php
 return [
     'app_name' => 'POVents',
-    'base_url' => 'https://your-domain.com',
+    'base_url' => 'https://povents.online',
     'timezone' => 'Asia/Manila',
     'db' => [
         'host' => 'localhost',
@@ -16,9 +16,9 @@ return [
         'host' => 'smtp.hostinger.com',
         'port' => 587,
         'encryption' => 'tls',
-        'username' => 'no-reply@your-domain.com',
+        'username' => 'no-reply@povents.online',
         'password' => 'replace-with-mailbox-password',
-        'from_email' => 'no-reply@your-domain.com',
+        'from_email' => 'no-reply@povents.online',
         'from_name' => 'POVents',
     ],
     // Keep false on Hostinger. This is only for local development.

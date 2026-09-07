@@ -7,8 +7,8 @@
 3. Copy `config.example.php` to `config.php`; enter the database details, HTTPS domain, PayMongo secret key, and webhook secret.
 4. Upload the **contents** of this folder to `public_html`.
 5. Ensure PHP 8.1+ is selected and the `uploads` folder is writable (usually permission 755).
-6. In PayMongo, register `https://your-domain.com/webhook.php` for `checkout_session.payment.paid` and copy its signing secret into the config.
-7. In Hostinger Cron Jobs, request `https://your-domain.com/cleanup.php?key=YOUR_CRON_SECRET` hourly. The app also cleans on normal page visits, but cron guarantees timely deletion.
+6. In PayMongo, register `https://povents.online/webhook` for `checkout_session.payment.paid` and copy its signing secret into the config.
+7. In Hostinger Cron Jobs, request `https://povents.online/cleanup.php?key=YOUR_CRON_SECRET` hourly. The app also cleans on normal page visits, but cron guarantees timely deletion.
 8. Visit the domain, register, pay with PayMongo test mode, create an event, and test its QR code on a phone.
 
 ## Existing installation
