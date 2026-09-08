@@ -31,7 +31,7 @@
   const eventFinished=metadataSource?.dataset.eventFinished==='1';
   const reelsAllowed=Number(metadataSource?.dataset.reelsAllowed||3),reelDuration=Number(metadataSource?.dataset.reelDuration||30),reelImages=Number(metadataSource?.dataset.reelImages||20);
   const unlimitedReels=metadataSource?.dataset.reelsUnlimited==='1';
-  toolbar.innerHTML = `<input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="event_id" value="${eventId || ''}"><input type="hidden" name="all_photos" value="1" data-all-photos disabled><label><input type="checkbox" data-select-all> Select all photos</label><span data-selected>0 selected</span><button type="submit" disabled>Download ZIP</button><button class="button light reel-create" type="button" data-reel-create disabled>Create ${reelDuration}s Reel</button><button class="button light album-create" type="button" ${eventFinished?'':'disabled'} title="${eventFinished?'Create the offline photo album set':'Photo album creation unlocks after the event ends.'}">Create Photo Album</button><button class="button light album-share" type="button">Copy shareable album link</button>`;
+  toolbar.innerHTML = `<input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="event_id" value="${eventId || ''}"><input type="hidden" name="all_photos" value="1" data-all-photos disabled><label><input type="checkbox" data-select-all> Select all photos</label><span data-selected>0 selected</span><button type="submit" disabled>Download ZIP</button><button class="button light reel-create" type="button" data-reel-create disabled>Create ${reelDuration}s Reel</button><button class="button light album-create" type="button" ${eventFinished?'':'disabled'} title="${eventFinished?'Create the offline photo album set':'Photo album creation unlocks after the event ends.'}">Create Photo Album</button><button class="button light slideshow-create" type="button">Play Slideshow</button>`;
   document.querySelector('.gallery').before(toolbar);
   const selectedLabel = toolbar.querySelector('[data-selected]');
   const downloadButton = toolbar.querySelector('button');
@@ -52,10 +52,9 @@
   const pagePrevious = pagination.querySelector('[data-page-prev]');
   const pageNext = pagination.querySelector('[data-page-next]');
   const pageStatus = pagination.querySelector('[data-page-status]');
-  const shareButton = toolbar.querySelector('.album-share');
+  const slideshowButton = toolbar.querySelector('.slideshow-create');
   const reelButton = toolbar.querySelector('[data-reel-create]');
   let reelsCreated = Number(document.querySelector('.presentation-qr-create')?.dataset.reelsCreated || 0);
-  bindAlbumShare(shareButton, eventId);
   const albumCreate = toolbar.querySelector('.album-create');
 
   const albumModal = document.createElement('div');
@@ -88,6 +87,41 @@
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!albumModal.hidden)closeAlbumModal();});
   albumInput.addEventListener('change',()=>{if(albumPreviewUrl)URL.revokeObjectURL(albumPreviewUrl);const file=albumInput.files[0];if(!file){albumPreview.hidden=true;albumPlaceholder.hidden=false;return;}albumPreviewUrl=URL.createObjectURL(file);albumPreview.src=albumPreviewUrl;albumPreview.hidden=false;albumPlaceholder.hidden=true;});
   albumForm.addEventListener('submit',async event=>{event.preventDefault();albumSubmit.disabled=true;albumCancel.disabled=true;albumSubmit.textContent='Creating…';albumError.hidden=true;startAlbumProgress();const formData=new FormData(albumForm);formData.append('csrf',csrf);formData.append('event_id',eventId||'');try{let response=await fetch('?action=create_album_job',{method:'POST',body:formData,headers:{Accept:'application/json'}});let result=await response.json();if(!response.ok)throw new Error(result.error||'The album job could not be started.');let job=result.job;while(job&&['queued','processing'].includes(job.status)){renderAlbumProgress(job.total_photos?job.processed_photos/job.total_photos*100:0);const body=new URLSearchParams({csrf,event_id:eventId||''});response=await fetch('?action=process_album_job',{method:'POST',body,headers:{Accept:'application/json','Content-Type':'application/x-www-form-urlencoded'}});result=await response.json();if(!response.ok)throw new Error(result.error||'An album volume could not be created.');job=result.job;if(job?.status==='failed')throw new Error(job.error_message||'An album volume could not be created.');}if(!job||job.status!=='completed')throw new Error('Album creation stopped before completion.');renderAlbumProgress(100);await new Promise(resolve=>setTimeout(resolve,450));hideAlbumProgress();closeAlbumModal();window.POVentsToast?.(`${job.total_volumes} album${Number(job.total_volumes)===1?'':'s'} created.`, 'success');location.reload();}catch(error){hideAlbumProgress();albumError.textContent=error.message||'The photo albums could not be created.';albumError.hidden=false;window.POVentsToast?.(error.message||'The photo albums could not be created.','error');}finally{albumSubmit.disabled=false;albumCancel.disabled=false;albumSubmit.textContent='Create album set';}});
+
+  const slideshowSetup=document.createElement('div');
+  slideshowSetup.className='slideshow-setup';
+  slideshowSetup.hidden=true;
+  slideshowSetup.setAttribute('role','dialog');
+  slideshowSetup.setAttribute('aria-modal','true');
+  slideshowSetup.setAttribute('aria-labelledby','slideshow-setup-title');
+  slideshowSetup.innerHTML=`<form class="slideshow-setup__panel"><div class="eyebrow">LED wall presentation</div><h2 id="slideshow-setup-title">Play Slideshow</h2><p>Every slide displays three photos upright. Optionally choose a background image for the full-screen presentation.</p><label class="album-modal__picker"><span>Choose background image</span><input type="file" accept="image/jpeg,image/png,image/webp"></label><small>JPG, PNG, or WebP · used only on this device</small><div class="album-modal__actions"><button class="button light" type="button" data-slideshow-cancel>Cancel</button><button class="button" type="submit">Start slideshow</button></div></form>`;
+  document.body.appendChild(slideshowSetup);
+  const slideshow=document.createElement('div');
+  slideshow.className='event-slideshow';
+  slideshow.hidden=true;
+  slideshow.setAttribute('role','dialog');
+  slideshow.setAttribute('aria-modal','true');
+  slideshow.setAttribute('aria-label','Event photo slideshow');
+  slideshow.innerHTML=`<div class="event-slideshow__backdrop"></div><header><img src="assets/povents-logo-dark.png?v=5" alt="POVents"><h2></h2><button type="button" data-slideshow-close aria-label="Close slideshow">×</button></header><main><div class="event-slideshow__photos"></div></main><footer><button type="button" data-slideshow-prev aria-label="Previous slide">‹</button><button type="button" data-slideshow-toggle>Pause</button><span data-slideshow-position></span><button type="button" data-slideshow-next aria-label="Next slide">›</button></footer>`;
+  document.body.appendChild(slideshow);
+  const slideshowForm=slideshowSetup.querySelector('form'),slideshowInput=slideshowSetup.querySelector('input[type="file"]'),slideshowPhotos=slideshow.querySelector('.event-slideshow__photos'),slideshowPosition=slideshow.querySelector('[data-slideshow-position]'),slideshowToggle=slideshow.querySelector('[data-slideshow-toggle]');
+  let slideshowIndex=0,slideshowTimer=0,slideshowBackgroundUrl='';
+  const slideshowPreloaded=new Set();
+  const slideshowSlides=()=>{const urls=links.map(link=>link.href),slides=[];for(let index=0;index<urls.length;index+=3)slides.push(urls.slice(index,index+3));return slides;};
+  function preloadSlideshowBatch(start,count=6){const urls=links.map(link=>link.href);for(let offset=0;offset<Math.min(count,urls.length);offset++){const index=(start+offset)%urls.length,url=urls[index];if(slideshowPreloaded.has(url))continue;const preload=new Image();preload.decoding='async';preload.src=url;slideshowPreloaded.add(url);}}
+  function renderSlideshow(){const slides=slideshowSlides();if(!slides.length)return;slideshowIndex=(slideshowIndex+slides.length)%slides.length;slideshowPhotos.querySelectorAll('.event-slideshow__photo').forEach(card=>card.classList.add('is-under'));slides[slideshowIndex].forEach((url,index)=>{const frame=document.createElement('figure'),photo=document.createElement('img');frame.className=`event-slideshow__photo toss-${index+1}`;frame.style.setProperty('--toss-order',String(index));photo.src=url;photo.alt=`Event photo ${slideshowIndex*3+index+1}`;photo.draggable=false;photo.decoding='async';frame.appendChild(photo);slideshowPhotos.appendChild(frame);requestAnimationFrame(()=>frame.classList.add('is-landed'));});const cards=[...slideshowPhotos.querySelectorAll('.event-slideshow__photo')];cards.slice(0,-9).forEach(card=>card.remove());slideshowPosition.textContent=`${slideshowIndex+1} / ${slides.length}`;if(slideshowIndex>0)preloadSlideshowBatch((slideshowIndex+1)*3,6);}
+  function stopSlideshowTimer(){clearInterval(slideshowTimer);slideshowTimer=0;slideshowToggle.textContent='Play';}
+  function startSlideshowTimer(){clearInterval(slideshowTimer);slideshowTimer=setInterval(()=>{slideshowIndex++;renderSlideshow();},5000);slideshowToggle.textContent='Pause';}
+  function closeSlideshow(){stopSlideshowTimer();slideshow.hidden=true;slideshowSetup.hidden=true;document.body.style.overflow='';if(document.fullscreenElement===slideshow)document.exitFullscreen().catch(()=>{});if(slideshowBackgroundUrl)URL.revokeObjectURL(slideshowBackgroundUrl);slideshowBackgroundUrl='';slideshow.style.removeProperty('--slideshow-background');slideshowForm.reset();slideshowButton.focus();}
+  slideshowButton.addEventListener('click',()=>{slideshowSetup.hidden=false;document.body.style.overflow='hidden';slideshowInput.focus();});
+  slideshowSetup.querySelector('[data-slideshow-cancel]').addEventListener('click',closeSlideshow);
+  slideshowSetup.addEventListener('click',event=>{if(event.target===slideshowSetup)closeSlideshow();});
+  slideshowForm.addEventListener('submit',event=>{event.preventDefault();const file=slideshowInput.files[0];if(file){slideshowBackgroundUrl=URL.createObjectURL(file);slideshow.style.setProperty('--slideshow-background',`url("${slideshowBackgroundUrl}")`);}slideshow.querySelector('h2').textContent=metadataSource?.dataset.eventTitle||document.querySelector('.dash-head h1')?.textContent||'POVents Event';slideshowSetup.hidden=true;slideshow.hidden=false;slideshowIndex=0;slideshowPhotos.replaceChildren();preloadSlideshowBatch(0,6);renderSlideshow();startSlideshowTimer();slideshow.requestFullscreen?.().catch(()=>{});});
+  slideshow.querySelector('[data-slideshow-close]').addEventListener('click',closeSlideshow);
+  slideshow.querySelector('[data-slideshow-prev]').addEventListener('click',()=>{slideshowIndex--;renderSlideshow();startSlideshowTimer();});
+  slideshow.querySelector('[data-slideshow-next]').addEventListener('click',()=>{slideshowIndex++;renderSlideshow();startSlideshowTimer();});
+  slideshowToggle.addEventListener('click',()=>{if(slideshowTimer)stopSlideshowTimer();else startSlideshowTimer();});
+  document.addEventListener('keydown',event=>{if(slideshow.hidden)return;if(event.key==='Escape')closeSlideshow();if(event.key==='ArrowLeft'){slideshowIndex--;renderSlideshow();startSlideshowTimer();}if(event.key==='ArrowRight'){slideshowIndex++;renderSlideshow();startSlideshowTimer();}if(event.key===' '){event.preventDefault();slideshowToggle.click();}});
 
   const deleteModal = document.createElement('div');
   deleteModal.className = 'delete-modal';

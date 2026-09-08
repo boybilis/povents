@@ -13,6 +13,29 @@ button,.button,input{min-height:44px}
 .gallery-toolbar [data-selected]{color:#64716b;margin-right:auto}
 .gallery-toolbar button{padding:10px 17px}
 .gallery-toolbar .album-create{padding:10px 17px;white-space:nowrap;background:#fffdf8;color:#17231f;border:1px solid #d9ddd4}
+.gallery-toolbar .slideshow-create{padding:10px 17px;white-space:nowrap;background:#083f31;color:#fff;border:1px solid #083f31}
+.slideshow-setup{position:fixed;inset:0;z-index:10020;display:grid;place-items:center;padding:24px;background:rgba(4,18,14,.78);backdrop-filter:blur(10px)}
+.slideshow-setup[hidden],.event-slideshow[hidden]{display:none!important}
+.slideshow-setup__panel{width:min(560px,100%);padding:30px;border-radius:24px;background:#fffdf8;box-shadow:0 30px 90px rgba(0,0,0,.35)}
+.slideshow-setup__panel h2{margin:8px 0 10px;font-size:clamp(28px,5vw,44px)}
+.slideshow-setup__panel p{color:#5b6d66;line-height:1.6}
+.event-slideshow{--slideshow-background:none;position:fixed;inset:0;z-index:10030;display:grid;grid-template-rows:auto 1fr auto;min-height:100dvh;overflow:hidden;background:#071a15;color:#fff}
+.event-slideshow__backdrop{position:absolute;inset:0;background-image:linear-gradient(rgba(3,22,17,.72),rgba(3,22,17,.82)),var(--slideshow-background);background-size:cover;background-position:center;filter:saturate(.85);transform:scale(1.02)}
+.event-slideshow header,.event-slideshow main,.event-slideshow footer{position:relative;z-index:1}
+.event-slideshow header{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:24px;padding:18px 30px;border-bottom:1px solid rgba(255,255,255,.2);background:rgba(2,24,18,.5)}
+.event-slideshow header img{width:min(150px,18vw);height:auto}
+.event-slideshow header h2{margin:0;text-align:right;font-size:clamp(18px,2.4vw,34px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.event-slideshow header button{width:48px;height:48px;padding:0;border:1px solid rgba(255,255,255,.35);border-radius:50%;background:rgba(0,0,0,.35);color:#fff;font-size:32px;line-height:1}
+.event-slideshow main{display:grid;place-items:center;min-height:0;padding:24px 4vw}
+.event-slideshow__photos{position:relative;width:min(1500px,100%);height:100%;max-height:calc(100dvh - 190px)}
+.event-slideshow__photo{position:absolute;top:50%;left:50%;width:min(29%,430px);height:auto;max-height:calc(100dvh - 200px);margin:0;overflow:hidden;border:clamp(5px,.65vw,11px) solid #fff;background:#07110e;box-shadow:0 22px 65px rgba(0,0,0,.5);aspect-ratio:3/4;opacity:0;transform:translate(calc(-50% + var(--toss-x)),calc(-160% + var(--toss-y))) rotate(var(--toss-rotate)) scale(1.12);transition:transform .78s cubic-bezier(.18,.86,.25,1.08),opacity .22s ease;transition-delay:calc(var(--toss-order)*110ms);will-change:transform,opacity}
+.event-slideshow__photo.toss-1{--toss-x:-112%;--toss-y:0%;--toss-rotate:-2deg}.event-slideshow__photo.toss-2{--toss-x:0%;--toss-y:-2%;--toss-rotate:1.5deg}.event-slideshow__photo.toss-3{--toss-x:112%;--toss-y:1%;--toss-rotate:-1deg}
+.event-slideshow__photo.is-landed{opacity:1;transform:translate(calc(-50% + var(--toss-x)),calc(-50% + var(--toss-y))) rotate(var(--toss-rotate)) scale(1)}
+.event-slideshow__photo.is-under{filter:saturate(.76) brightness(.72);box-shadow:0 10px 28px rgba(0,0,0,.35)}
+.event-slideshow__photo img{display:block;width:100%;height:100%;object-fit:contain;object-position:center;transform:none!important;image-orientation:from-image}
+.event-slideshow footer{display:flex;align-items:center;justify-content:center;gap:14px;padding:12px 24px;background:rgba(2,24,18,.72);border-top:1px solid rgba(255,255,255,.18)}
+.event-slideshow footer button{min-width:54px;padding:10px 18px;border:1px solid rgba(255,255,255,.3);border-radius:999px;background:rgba(255,255,255,.12);color:#fff}
+.event-slideshow footer span{min-width:70px;text-align:center;font-weight:700}
 .gallery-toolbar .album-share{padding:10px 17px;white-space:nowrap;background:#fffdf8;color:#17231f;border:1px solid #d9ddd4}
 .gallery-pagination{display:flex;align-items:center;justify-content:center;gap:14px;margin:20px 0 0}.gallery-pagination button{padding:10px 16px;background:#fffdf8;color:#17231f;border:1px solid #d9ddd4}.gallery-pagination span{min-width:110px;text-align:center;color:#64716b;font-size:14px;font-weight:700}.gallery-pagination button:disabled{opacity:.4}
 .photo-select{position:absolute;z-index:3;top:8px;left:8px;width:30px;height:30px;border-radius:50%;background:#ffffffdd;display:grid;place-items:center;cursor:pointer;box-shadow:0 3px 12px #0003}
@@ -114,7 +137,8 @@ button,.button,input{min-height:44px}
   .gallery{columns:unset;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .gallery-toolbar{display:grid;grid-template-columns:minmax(0,1fr);gap:9px;width:100%;max-width:100%;padding:12px;overflow:hidden}
   .gallery-toolbar label{min-width:0;flex-wrap:wrap}.gallery-toolbar [data-selected]{margin:0;text-align:left}
-  .gallery-toolbar button,.gallery-toolbar .album-download,.gallery-toolbar .album-create,.gallery-toolbar .album-share,.gallery-toolbar .reel-create{grid-column:1;width:100%;max-width:100%;min-width:0;white-space:normal;text-align:center;line-height:1.25}
+  .gallery-toolbar button,.gallery-toolbar .album-download,.gallery-toolbar .album-create,.gallery-toolbar .album-share,.gallery-toolbar .slideshow-create,.gallery-toolbar .reel-create{grid-column:1;width:100%;max-width:100%;min-width:0;white-space:normal;text-align:center;line-height:1.25}
+  .event-slideshow header{gap:10px;padding:12px}.event-slideshow header img{width:100px}.event-slideshow header h2{font-size:17px}.event-slideshow header button{width:40px;height:40px;font-size:26px}.event-slideshow main{padding:14px 10px}.event-slideshow__photos{max-height:calc(100dvh - 150px)}.event-slideshow__photo{width:30%;border-width:3px;max-height:calc(100dvh - 160px)}.event-slideshow__photo.toss-1{--toss-x:-110%}.event-slideshow__photo.toss-3{--toss-x:110%}.event-slideshow footer{padding:8px;gap:7px}.event-slideshow footer button{min-width:44px;padding:8px 12px}
   .gallery-pagination{gap:8px}.gallery-pagination button{padding:9px 12px}.gallery-pagination span{min-width:90px;font-size:13px}
   .shot{margin:0}
   .shot img{height:190px;object-fit:cover;border-radius:13px}
