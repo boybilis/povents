@@ -60,7 +60,7 @@ ob_start(static function (string $html): string {
     }
     return str_replace(
         ['</head>','</body>'],
-        ['<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png?v=1"><link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png?v=1"><link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png?v=1"><link rel="shortcut icon" href="assets/favicon.ico?v=1"><link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=1"><link rel="stylesheet" href="assets/responsive.css?v=23"><link rel="stylesheet" href="assets/hero.css?v=1"><link rel="stylesheet" href="assets/dashboard.css?v=2"><link rel="stylesheet" href="assets/reel.css?v=2"><link rel="stylesheet" href="assets/how.css?v=1"><link rel="stylesheet" href="assets/admin.css?v=1"><link rel="stylesheet" href="assets/toast.css?v=1"><link rel="stylesheet" href="assets/event-admin.css?v=2"></head>','<script src="assets/toast.js?v=1"></script><script src="assets/reel.js?v=3"></script><script src="assets/gallery.js?v=20"></script><script src="assets/presentation-qr.js?v=2"></script><script src="assets/event-admin.js?v=2"></script></body>'],
+        ['<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png?v=1"><link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png?v=1"><link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png?v=1"><link rel="shortcut icon" href="assets/favicon.ico?v=1"><link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=1"><link rel="stylesheet" href="assets/responsive.css?v=23"><link rel="stylesheet" href="assets/hero.css?v=1"><link rel="stylesheet" href="assets/dashboard.css?v=2"><link rel="stylesheet" href="assets/reel.css?v=2"><link rel="stylesheet" href="assets/how.css?v=1"><link rel="stylesheet" href="assets/admin.css?v=1"><link rel="stylesheet" href="assets/toast.css?v=1"><link rel="stylesheet" href="assets/event-admin.css?v=2"></head>','<script src="assets/toast.js?v=1"></script><script src="assets/reel.js?v=3"></script><script src="assets/gallery.js?v=21"></script><script src="assets/presentation-qr.js?v=2"></script><script src="assets/event-admin.js?v=2"></script></body>'],
         $html
     );
 });
@@ -98,6 +98,15 @@ if ($action === 'album_job_status') {
     header('Content-Type: application/json');$u=require_user();$event=event_for_owner((int)($_GET['event_id']??0),(int)$u['id']);
     if(!$event){http_response_code(404);echo json_encode(['error'=>'Event not found.']);exit;}
     $job=album_job_for_event((int)$event['id']);echo json_encode(['job'=>$job],JSON_UNESCAPED_SLASHES);exit;
+}
+if ($action === 'slideshow_photos') {
+    header('Content-Type: application/json');
+    header('Cache-Control: private, no-store');
+    $u=require_user();$event=event_for_owner((int)($_GET['event_id']??0),(int)$u['id']);
+    if(!$event){http_response_code(404);echo json_encode(['error'=>'Event not found.']);exit;}
+    $s=db()->prepare('SELECT file_name FROM photos WHERE event_id=? AND expires_at>NOW() ORDER BY created_at DESC,id DESC');$s->execute([$event['id']]);
+    $photos=[];foreach($s->fetchAll(PDO::FETCH_COLUMN) as $fileName){$fileName=basename((string)$fileName);if(is_file(__DIR__.'/uploads/'.$event['id'].'/'.$fileName))$photos[]='uploads/'.(int)$event['id'].'/'.rawurlencode($fileName);}
+    echo json_encode(['photos'=>$photos],JSON_UNESCAPED_SLASHES);exit;
 }
 if ($action === 'download_album_volume') {
     $u=require_user();$event=event_for_owner((int)($_GET['event_id']??0),(int)$u['id']);$volumeNumber=max(1,(int)($_GET['volume']??0));$job=$event?album_job_for_event((int)$event['id']):null;
