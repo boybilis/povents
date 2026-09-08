@@ -111,9 +111,9 @@ button,.button,input{min-height:44px}
   .copyline button{width:100%}
 
   .gallery{columns:unset;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-  .gallery-toolbar{display:grid;grid-template-columns:1fr auto;gap:10px}
-  .gallery-toolbar [data-selected]{margin:0;text-align:right}
-  .gallery-toolbar button,.gallery-toolbar .album-download,.gallery-toolbar .album-share{grid-column:auto;width:100%}
+  .gallery-toolbar{display:grid;grid-template-columns:minmax(0,1fr);gap:9px;width:100%;max-width:100%;padding:12px;overflow:hidden}
+  .gallery-toolbar label{min-width:0;flex-wrap:wrap}.gallery-toolbar [data-selected]{margin:0;text-align:left}
+  .gallery-toolbar button,.gallery-toolbar .album-download,.gallery-toolbar .album-create,.gallery-toolbar .album-share,.gallery-toolbar .reel-create{grid-column:1;width:100%;max-width:100%;min-width:0;white-space:normal;text-align:center;line-height:1.25}
   .gallery-pagination{gap:8px}.gallery-pagination button{padding:9px 12px}.gallery-pagination span{min-width:90px;font-size:13px}
   .shot{margin:0}
   .shot img{height:190px;object-fit:cover;border-radius:13px}
