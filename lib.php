@@ -242,6 +242,7 @@ function remove_event_storage(int $eventId): void {
     }
     $album = album_storage_path($eventId);
     if (is_file($album) && !unlink($album)) throw new RuntimeException('The saved photo album could not be permanently removed.');
+    clear_album_volume_files($eventId);
 }
 
 function album_download_name(array $event): string {
@@ -258,16 +259,7 @@ function serve_saved_photo_album(array $event, string $path): never {
     exit;
 }
 
-function download_photo_album(array $event, bool $shared = false, ?string $coverDataUri = null): never {
-    $s = db()->prepare('SELECT file_name,mime_type,created_at FROM photos WHERE event_id=? AND expires_at>NOW() ORDER BY created_at ASC');
-    $s->execute([$event['id']]);
-    $photos = array_values(array_filter($s->fetchAll(), static fn(array $photo): bool => is_file(__DIR__.'/uploads/'.$event['id'].'/'.basename($photo['file_name']))));
-    if (!$photos) {
-        $savedAlbum = album_storage_path((int)$event['id']);
-        if (is_file($savedAlbum)) serve_saved_photo_album($event, $savedAlbum);
-        if ($shared) { http_response_code(404); exit('This photo album does not have any available photos.'); }
-        flash('error', 'No saved photo album is available for this event.'); go(organizer_event_url($event));
-    }
+function build_photo_album_html(array $event, array $photos, ?string $coverDataUri = null, int $volumeNumber = 1, int $totalVolumes = 1): string {
     if (!extension_loaded('gd')) { http_response_code(500); exit('Photo album compression is not enabled on this server. Enable the PHP GD extension and try again.'); }
     $byOrientation = ['portrait'=>[], 'landscape'=>[]];
     foreach ($photos as $photo) {
@@ -285,22 +277,22 @@ function download_photo_album(array $event, bool $shared = false, ?string $cover
     $needsBackBlank = count($albumPages) % 2 === 1;
     $visibleAlbumPages = count($albumPages) + 1;
     $safeTitle = e((string)$event['title']);
+    $volumeLabel = $totalVolumes > 1 ? 'Album '.$volumeNumber.' of '.$totalVolumes : 'Photo Album';
     $date = $event['event_date'] ? date('F j, Y', strtotime((string)$event['event_date'])) : '';
     $coverStyle = $coverDataUri ? ' style="background-image:linear-gradient(#071c1688,#071c16b8),url('.$coverDataUri.');background-size:cover;background-position:center"' : '';
     $albumPageStyle = $coverDataUri ? ' style="background-image:linear-gradient(#f7f1e4c9,#f7f1e4c9),url('.$coverDataUri.');background-size:cover;background-position:center"' : '';
-    if (ob_get_level()) ob_end_clean();
     set_time_limit(0);
     $pageFlipPath = __DIR__.'/assets/page-flip.browser.js';
     $pageFlipLibrary = is_file($pageFlipPath) ? (string)file_get_contents($pageFlipPath) : '';
     if ($pageFlipLibrary === '') { http_response_code(500); exit('The offline photo album viewer is unavailable.'); }
     ob_start();
-    echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>'.$safeTitle.' · Offline photo album</title><style>';
+    echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>'.$safeTitle.' · '.e($volumeLabel).'</title><style>';
     echo '*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:#151916;color:#eef2ef;font-family:Arial,sans-serif;overflow:hidden}.cover img{width:min(210px,35%);filter:drop-shadow(0 4px 8px #0008)}.cover h1{font-family:Georgia,serif;font-size:clamp(24px,4vw,52px);line-height:1.08;margin:16px 0 8px;overflow-wrap:anywhere}.cover p{color:#cbd8d2}.grid{display:grid;gap:clamp(8px,2vw,20px);height:100%}.photo{margin:0;display:flex;align-items:center;justify-content:center;min-width:0;min-height:0;overflow:hidden}.photo img{width:auto;height:auto;max-width:100%;max-height:100%;display:block;object-fit:contain;border:7px solid #fff;border-radius:0;background:transparent}.controls{display:flex;align-items:center;justify-content:center;gap:12px}.controls button{border:0;border-radius:999px;padding:12px 18px;background:#dff25f;color:#10251d;font:700 15px Arial;cursor:pointer}.controls button:disabled{opacity:.35}.count{min-width:95px;text-align:center;color:#bec8c2;font-size:14px}.hint{text-align:center;color:#8f9b95;font-size:12px}</style></head><body><main class="album"><section class="book" id="book">';
     echo '<style>.album{display:block;width:100vw;height:100vh;height:100dvh;padding:0}.book{position:relative;width:100%;height:100%;min-height:100%}.album>footer{position:fixed;z-index:9999;left:0;right:0;bottom:0;padding:26px 12px 10px;background:linear-gradient(transparent,#101512 42%);pointer-events:auto}.controls{flex-wrap:wrap}.controls button{padding:10px 15px}.hint{pointer-events:none}@media(orientation:landscape){.book{width:100%;height:100%;aspect-ratio:auto}}</style>';
     echo '<style>.album-page-header{display:flex;align-items:center;justify-content:space-between;gap:18px;height:40px;padding:0 2px 10px}.album-page-logo{display:block;width:78px;height:24px;background:url("data:image/png;base64,'.base64_encode((string)file_get_contents(__DIR__.'/assets/povents-logo.png')).'") left center/contain no-repeat;flex:0 0 auto}.album-page-header strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;font-family:Georgia,serif;font-size:clamp(13px,1.4vw,18px);line-height:1.1;font-weight:600}.grid{width:100%;min-width:0;min-height:0;overflow:hidden}.portrait-page .grid,.landscape-page .grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:minmax(0,1fr);gap:14px}@media(max-width:700px){.album-page-header{height:36px}.album-page-logo{width:68px;height:22px}.album-page-header strong{font-size:13px}}</style>';
     echo '<style>.page-surface{position:absolute;inset:0;overflow:hidden;padding:clamp(14px,3vw,38px);background:#f7f1e4;color:#17231f;box-shadow:inset 18px 0 28px #8d806522}.blank-page .page-surface{background:#151916;box-shadow:none}.cover .page-surface{display:grid;place-items:center;text-align:center;color:#fff;background:linear-gradient(145deg,#113f31,#071c16)}.page-surface>.grid{height:calc(100% - 40px)}@media(max-width:700px){.page-surface{padding:10px 10px 115px}.page-surface>.grid{height:calc(100% - 36px)}}</style>';
     echo '<article class="page blank-page" aria-hidden="true"><div class="page-surface"></div></article>';
-    echo '<article class="page cover"><div class="page-surface"'.$coverStyle.'><div><img src="data:image/png;base64,'.base64_encode((string)file_get_contents(__DIR__.'/assets/povents-logo-dark.png')).'" alt="POVents"><h1>'.$safeTitle.'</h1><p>'.e($date).'</p><p>'.count($photos).' memories · available offline</p></div></div></article>';
+    echo '<article class="page cover"><div class="page-surface"'.$coverStyle.'><div><img src="data:image/png;base64,'.base64_encode((string)file_get_contents(__DIR__.'/assets/povents-logo-dark.png')).'" alt="POVents"><h1>'.$safeTitle.'</h1><p>'.e($date).'</p><p>'.e($volumeLabel).' · '.count($photos).' memories · available offline</p></div></div></article>';
     foreach ($albumPages as $pageIndex => $albumPage) {
         $pagePhotos = $albumPage['photos'];
         echo '<article class="page '.$albumPage['orientation'].'-page"><div class="page-surface"'.$albumPageStyle.'><header class="album-page-header"><span class="album-page-logo" role="img" aria-label="POVents"></span><strong>'.$safeTitle.'</strong></header><div class="grid">';
@@ -315,12 +307,109 @@ function download_photo_album(array $event, bool $shared = false, ?string $cover
     echo '</section><footer><div class="controls"><button id="prev" type="button">← Previous</button><span class="count" id="count"></span><button id="next" type="button">Next →</button><button id="full" type="button">⛶ Fullscreen</button></div><p class="hint">Drag a page, swipe, or use the arrow keys · On mobile, use Fullscreen then rotate landscape</p></footer></main>';
     echo '<script>/* StPageFlip 2.0.7 · MIT License · Copyright (c) 2020 Nodlik */'.str_ireplace('</script', '<\/script', $pageFlipLibrary).'</script>';
     echo '<script>(()=>{const bookElement=document.querySelector("#book"),pages=document.querySelectorAll(".page"),prev=document.querySelector("#prev"),next=document.querySelector("#next"),full=document.querySelector("#full"),count=document.querySelector("#count"),visibleTotal='.$visibleAlbumPages.';const flip=new St.PageFlip(bookElement,{width:1200,height:900,size:"stretch",minWidth:280,maxWidth:1800,minHeight:210,maxHeight:1350,drawShadow:true,flippingTime:900,usePortrait:true,startZIndex:10,autoSize:true,maxShadowOpacity:.55,showCover:false,mobileScrollSupport:false,swipeDistance:30,clickEventForward:true,useMouseEvents:true,showPageCorners:false,disableFlipByClick:false});function controls(){const i=flip.getCurrentPageIndex();prev.disabled=i===0;next.disabled=i>=visibleTotal;count.textContent=`${Math.min(visibleTotal,i===0?1:i)} / ${visibleTotal}`}flip.on("init",controls);flip.on("flip",controls);flip.on("changeOrientation",controls);flip.loadFromHTML(pages);prev.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();flip.flipPrev("top")});next.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();flip.flipNext("top")});full.onclick=async()=>{try{if(document.fullscreenElement){await document.exitFullscreen();screen.orientation?.unlock?.()}else{await document.documentElement.requestFullscreen?.();await screen.orientation?.lock?.("landscape")}}catch(_){full.textContent="Rotate landscape"}};addEventListener("fullscreenchange",()=>{full.textContent=document.fullscreenElement?"Exit fullscreen":"⛶ Fullscreen";setTimeout(()=>flip.update(),100)});addEventListener("keydown",e=>{if(e.key==="ArrowLeft")flip.flipPrev("top");if(e.key==="ArrowRight")flip.flipNext("top");if(e.key.toLowerCase()==="f")full.click()});controls()})();</script></body></html>';
-    $albumHtml = (string)ob_get_clean();
+    return (string)ob_get_clean();
+}
+
+function download_photo_album(array $event, bool $shared = false, ?string $coverDataUri = null): never {
+    $s = db()->prepare('SELECT id,file_name,mime_type,created_at FROM photos WHERE event_id=? AND expires_at>NOW() ORDER BY created_at ASC,id ASC');
+    $s->execute([$event['id']]);
+    $photos = array_values(array_filter($s->fetchAll(), static fn(array $photo): bool => is_file(__DIR__.'/uploads/'.$event['id'].'/'.basename($photo['file_name']))));
+    if (!$photos) {
+        $savedAlbum = album_storage_path((int)$event['id']);
+        if (is_file($savedAlbum)) serve_saved_photo_album($event, $savedAlbum);
+        if ($shared) { http_response_code(404); exit('This photo album does not have any available photos.'); }
+        flash('error', 'No saved photo album is available for this event.'); go(organizer_event_url($event));
+    }
+    $albumHtml = build_photo_album_html($event, $photos, $coverDataUri);
     $albumDirectory = __DIR__.'/albums';
     if (!is_dir($albumDirectory) && !mkdir($albumDirectory, 0755, true)) { http_response_code(500); exit('Photo album storage is not writable.'); }
     $savedAlbum = album_storage_path((int)$event['id']);
     if (file_put_contents($savedAlbum, $albumHtml, LOCK_EX) === false) { http_response_code(500); exit('The saved photo album could not be updated.'); }
     serve_saved_photo_album($event, $savedAlbum);
+}
+
+function album_volume_directory(int $eventId): string {
+    return __DIR__.'/albums/event-'.$eventId;
+}
+
+function album_volume_path(int $eventId, int $volumeNumber): string {
+    return album_volume_directory($eventId).'/album-'.str_pad((string)$volumeNumber, 3, '0', STR_PAD_LEFT).'.html';
+}
+
+function clear_album_volume_files(int $eventId): void {
+    $directory = album_volume_directory($eventId);
+    if (!is_dir($directory)) return;
+    foreach (new DirectoryIterator($directory) as $item) {
+        if ($item->isDot()) continue;
+        if (!$item->isFile() || !unlink($item->getPathname())) throw new RuntimeException('An old album volume could not be removed.');
+    }
+    if (!rmdir($directory)) throw new RuntimeException('The old album volume folder could not be removed.');
+}
+
+function delete_album_job_records(int $eventId): void {
+    $s=db()->prepare('SELECT id FROM album_jobs WHERE event_id=?');$s->execute([$eventId]);$jobId=(int)$s->fetchColumn();if(!$jobId)return;
+    db()->prepare('DELETE FROM album_job_photos WHERE job_id=?')->execute([$jobId]);db()->prepare('DELETE FROM album_volumes WHERE job_id=?')->execute([$jobId]);db()->prepare('DELETE FROM album_jobs WHERE id=?')->execute([$jobId]);
+}
+
+function album_job_for_event(int $eventId): ?array {
+    $s=db()->prepare('SELECT * FROM album_jobs WHERE event_id=? LIMIT 1');$s->execute([$eventId]);$job=$s->fetch();
+    if(!$job)return null;
+    $v=db()->prepare('SELECT id,volume_number,photo_count,file_name,file_size,status,error_message,completed_at FROM album_volumes WHERE job_id=? ORDER BY volume_number');$v->execute([$job['id']]);
+    $job['volumes']=$v->fetchAll();return $job;
+}
+
+function album_job_section_html(array $event): string {
+    $eventId=(int)$event['id'];$job=album_job_for_event($eventId);
+    $html='<section class="card album-library" data-album-library data-event-id="'.$eventId.'"><div class="album-library__head"><div><div class="eyebrow">Saved offline files</div><h2>Photo album set</h2></div>';
+    if($job&&$job['status']==='completed')$html.='<a class="button" href="?action=download_all_albums&amp;event_id='.$eventId.'">Download all albums</a>';
+    $html.='</div>';
+    if(!$job){$message=event_day_status($event)==='finished'?'Create an album set to turn the gallery into downloadable 30-photo offline albums.':'Photo album creation unlocks after the event has finished, so every captured photo can be included.';return $html.'<p class="muted">'.$message.'</p><div class="album-volume-list" data-album-volume-list></div></section>';}
+    $total=max(1,(int)$job['total_photos']);$percent=min(100,(int)round(((int)$job['processed_photos']/$total)*100));$label=ucfirst((string)$job['status']);
+    $html.='<div class="album-library__status"><div><strong data-album-job-label>'.$label.'</strong><span data-album-job-count>'.(int)$job['processed_photos'].' of '.(int)$job['total_photos'].' photos</span></div><div class="album-library__track"><span style="width:'.$percent.'%" data-album-job-bar></span></div></div>';
+    if(!empty($job['error_message']))$html.='<p class="album-library__error">'.e((string)$job['error_message']).'</p>';
+    $html.='<div class="album-volume-list" data-album-volume-list>';
+    foreach($job['volumes'] as $volume){$number=(int)$volume['volume_number'];$html.='<article class="album-volume status-'.e((string)$volume['status']).'"><div><strong>Album '.$number.'</strong><span>'.(int)$volume['photo_count'].' photos · '.ucfirst(e((string)$volume['status'])).'</span></div>'.($volume['status']==='ready'?'<a class="button light" href="?action=download_album_volume&amp;event_id='.$eventId.'&amp;volume='.$number.'">Download</a>':'<span class="album-volume__waiting">Please wait</span>').'</article>';}
+    return $html.'</div></section>';
+}
+
+function queue_album_job(array $event, ?string $coverDataUri): array {
+    $photos=db()->prepare('SELECT id FROM photos WHERE event_id=? AND expires_at>NOW() ORDER BY created_at ASC,id ASC');$photos->execute([$event['id']]);$photoIds=array_map('intval',$photos->fetchAll(PDO::FETCH_COLUMN));
+    if(!$photoIds)throw new RuntimeException('No available photos can be added to an album.');
+    $total=count($photoIds);$volumes=(int)ceil($total/30);clear_album_volume_files((int)$event['id']);
+    $pdo=db();$pdo->beginTransaction();
+    try{
+        $old=$pdo->prepare('SELECT id FROM album_jobs WHERE event_id=? FOR UPDATE');$old->execute([$event['id']]);$oldId=(int)$old->fetchColumn();
+        if($oldId){$pdo->prepare('DELETE FROM album_job_photos WHERE job_id=?')->execute([$oldId]);$pdo->prepare('DELETE FROM album_volumes WHERE job_id=?')->execute([$oldId]);$pdo->prepare('DELETE FROM album_jobs WHERE id=?')->execute([$oldId]);}
+        $pdo->prepare('INSERT INTO album_jobs(event_id,status,total_photos,total_volumes,cover_data) VALUES(?,?,?,?,?)')->execute([$event['id'],'queued',$total,$volumes,$coverDataUri]);$jobId=(int)$pdo->lastInsertId();
+        $photoInsert=$pdo->prepare('INSERT INTO album_job_photos(job_id,photo_id,sequence_no) VALUES(?,?,?)');foreach($photoIds as $index=>$photoId)$photoInsert->execute([$jobId,$photoId,$index+1]);
+        $volumeInsert=$pdo->prepare('INSERT INTO album_volumes(job_id,event_id,volume_number,photo_count,status) VALUES(?,?,?,?,?)');for($volume=1;$volume<=$volumes;$volume++)$volumeInsert->execute([$jobId,$event['id'],$volume,min(30,$total-(($volume-1)*30)),'queued']);
+        $pdo->commit();return album_job_for_event((int)$event['id'])??[];
+    }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
+}
+
+function process_album_jobs(int $maxVolumes=1, ?int $eventId=null): int {
+    $processed=0;
+    for($run=0;$run<$maxVolumes;$run++){
+        if($eventId){$jobQuery=db()->prepare("SELECT * FROM album_jobs WHERE event_id=? AND status IN ('queued','processing') LIMIT 1");$jobQuery->execute([$eventId]);$job=$jobQuery->fetch();}
+        else{$job=db()->query("SELECT * FROM album_jobs WHERE status IN ('queued','processing') ORDER BY created_at,id LIMIT 1")->fetch();}
+        if(!$job)break;
+        $volume=db()->prepare("SELECT * FROM album_volumes WHERE job_id=? AND (status='queued' OR (status='processing' AND updated_at<DATE_SUB(NOW(),INTERVAL 10 MINUTE))) ORDER BY volume_number LIMIT 1");$volume->execute([$job['id']]);$volume=$volume->fetch();
+        if(!$volume){$unfinished=db()->prepare("SELECT COUNT(*) FROM album_volumes WHERE job_id=? AND status<>'ready'");$unfinished->execute([$job['id']]);if((int)$unfinished->fetchColumn()>0)break;db()->prepare("UPDATE album_jobs SET status='completed',processed_photos=total_photos,completed_volumes=total_volumes,cover_data=NULL,completed_at=NOW() WHERE id=?")->execute([$job['id']]);continue;}
+        db()->prepare("UPDATE album_jobs SET status='processing',started_at=COALESCE(started_at,NOW()),error_message=NULL WHERE id=?")->execute([$job['id']]);$claim=db()->prepare("UPDATE album_volumes SET status='processing',error_message=NULL WHERE id=? AND (status='queued' OR (status='processing' AND updated_at<DATE_SUB(NOW(),INTERVAL 10 MINUTE)))");$claim->execute([$volume['id']]);if($claim->rowCount()!==1)continue;
+        try{
+            $eventQuery=db()->prepare('SELECT * FROM events WHERE id=?');$eventQuery->execute([$job['event_id']]);$event=$eventQuery->fetch();if(!$event)throw new RuntimeException('The event no longer exists.');
+            $start=(int)(($volume['volume_number']-1)*30)+1;$end=$start+29;
+            $photoQuery=db()->prepare('SELECT p.id,p.file_name,p.mime_type,p.created_at FROM album_job_photos a JOIN photos p ON p.id=a.photo_id AND p.event_id=? WHERE a.job_id=? AND a.sequence_no BETWEEN ? AND ? ORDER BY a.sequence_no');$photoQuery->execute([$job['event_id'],$job['id'],$start,$end]);
+            $photos=array_values(array_filter($photoQuery->fetchAll(),static fn(array $photo):bool=>is_file(__DIR__.'/uploads/'.$job['event_id'].'/'.basename($photo['file_name']))));if(!$photos)throw new RuntimeException('The source photos for this album volume are unavailable.');
+            $html=build_photo_album_html($event,$photos,$job['cover_data']?:null,(int)$volume['volume_number'],(int)$job['total_volumes']);$directory=album_volume_directory((int)$job['event_id']);if(!is_dir($directory)&&!mkdir($directory,0755,true))throw new RuntimeException('Album volume storage is not writable.');
+            $path=album_volume_path((int)$job['event_id'],(int)$volume['volume_number']);$temporary=$path.'.tmp';if(file_put_contents($temporary,$html,LOCK_EX)===false||!rename($temporary,$path))throw new RuntimeException('The album volume could not be saved.');
+            db()->prepare("UPDATE album_volumes SET status='ready',file_name=?,file_size=?,completed_at=NOW() WHERE id=?")->execute([basename($path),filesize($path),$volume['id']]);
+            db()->prepare('UPDATE album_jobs SET processed_photos=LEAST(total_photos,processed_photos+?),completed_volumes=completed_volumes+1 WHERE id=?')->execute([(int)$volume['photo_count'],$job['id']]);
+            $remaining=db()->prepare("SELECT COUNT(*) FROM album_volumes WHERE job_id=? AND status<>'ready'");$remaining->execute([$job['id']]);if((int)$remaining->fetchColumn()===0)db()->prepare("UPDATE album_jobs SET status='completed',processed_photos=total_photos,completed_volumes=total_volumes,cover_data=NULL,completed_at=NOW() WHERE id=?")->execute([$job['id']]);
+            $processed++;
+        }catch(Throwable $e){db()->prepare("UPDATE album_volumes SET status='failed',error_message=? WHERE id=?")->execute([$e->getMessage(),$volume['id']]);db()->prepare("UPDATE album_jobs SET status='failed',error_message=? WHERE id=?")->execute([$e->getMessage(),$job['id']]);break;}
+    }
+    return $processed;
 }
 
 function album_photo_data_uri(string $path): string {
@@ -379,7 +468,7 @@ function paymongo(string $method, string $path, ?array $body = null): array {
 function purge_expired_photos(int $maxBatches = 1): int {
     $delete = db()->prepare('DELETE FROM photos WHERE id=?'); $count = 0;
     for ($batch=0; $batch<$maxBatches; $batch++) {
-        $rows = db()->query('SELECT id,event_id,file_name FROM photos WHERE expires_at<=NOW() LIMIT 500')->fetchAll();
+        $rows = db()->query("SELECT p.id,p.event_id,p.file_name FROM photos p WHERE p.expires_at<=NOW() AND NOT EXISTS (SELECT 1 FROM album_job_photos ajp JOIN album_jobs aj ON aj.id=ajp.job_id WHERE ajp.photo_id=p.id AND aj.status IN ('queued','processing')) LIMIT 500")->fetchAll();
         if (!$rows) break;
         foreach ($rows as $row) {
             $path = __DIR__ . '/uploads/' . $row['event_id'] . '/' . basename($row['file_name']);

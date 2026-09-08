@@ -8,18 +8,18 @@
 4. Upload the **contents** of this folder to `public_html`.
 5. Ensure PHP 8.1+ is selected and the `uploads` folder is writable (usually permission 755).
 6. In PayMongo, register `https://povents.online/webhook` for `checkout_session.payment.paid` and copy its signing secret into the config.
-7. In Hostinger Cron Jobs, request `https://povents.online/cleanup.php?key=YOUR_CRON_SECRET` hourly. The app also cleans on normal page visits, but cron guarantees timely deletion.
+7. In Hostinger Cron Jobs, request `https://povents.online/cleanup.php?key=YOUR_CRON_SECRET` every minute. Each run creates the next queued 30-photo album volume and also permanently removes expired photos.
 8. Visit the domain, register, pay with PayMongo test mode, create an event, and test its QR code on a phone.
 
 ## Existing installation
 
-If the original schema was already imported, run `migrate-v2.sql`, `migrate-v3.sql`, and then `migrate-v4.sql` once instead of importing `schema.sql` again.
+For the background multi-volume album system, import `migrate-v10.sql` once through phpMyAdmin before deploying the matching PHP and JavaScript files.
 
 ## Payments and retention
 
 The checkout uses PayMongo-hosted QRPh payment pages. Each confirmed payment adds one event pass, and creating an event consumes that pass. Activation happens only through a signed `checkout_session.payment.paid` webhook. Start with `sk_test_...`, then replace it with a live secret key when your PayMongo account and QRPh payment method are approved.
 
-Every photo expires at the end of the seventh day after its event date. The organizer gallery shows the remaining time; the hourly cleanup permanently removes both expired database records and physical image files so they no longer consume server storage.
+Every photo expires according to its event plan. The organizer gallery shows the remaining time; cleanup permanently removes both expired database records and physical image files so they no longer consume server storage. Photos assigned to an active album job are retained until their queued volumes finish, then become eligible for cleanup.
 
 The guest camera opens only between the event's start and end time using the configured `Asia/Manila` timezone. Before the window the page shows when to return; after it ends the page reports that the event is finished and rejects further uploads.
 

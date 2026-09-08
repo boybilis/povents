@@ -39,7 +39,7 @@ ob_start(static function (string $html): string {
         $eventTime = !empty($currentEvent['start_time']) ? date('g:i A', strtotime((string)$currentEvent['start_time'])).' – '.date('g:i A', strtotime((string)$currentEvent['end_time'])) : '';
         $reelsAllowed = max(0, (int)($currentEvent['reels_allowed'] ?? 3));
         $reelsCreated = min($reelsAllowed, max(0, (int)($currentEvent['reels_created'] ?? 0)));
-        $downloadButton = '<p class="event-downloads"><button class="button light presentation-qr-create" type="button" data-event-id="'.$eventId.'" data-event-title="'.$eventTitle.'" data-event-date="'.htmlspecialchars($eventDate,ENT_QUOTES,'UTF-8').'" data-event-time="'.htmlspecialchars($eventTime,ENT_QUOTES,'UTF-8').'" data-reels-created="'.$reelsCreated.'" data-reels-allowed="'.$reelsAllowed.'" data-reels-unlimited="'.(int)($currentEvent['reels_unlimited'] ?? 0).'" data-reel-duration="'.(int)($currentEvent['reel_duration_seconds'] ?? 30).'" data-reel-images="'.(int)($currentEvent['reel_image_count'] ?? 20).'">Create Presentation QR</button></p>';
+        $downloadButton = '<p class="event-downloads"><button class="button light presentation-qr-create" type="button" data-event-id="'.$eventId.'" data-event-title="'.$eventTitle.'" data-event-date="'.htmlspecialchars($eventDate,ENT_QUOTES,'UTF-8').'" data-event-time="'.htmlspecialchars($eventTime,ENT_QUOTES,'UTF-8').'" data-event-finished="'.(event_day_status($currentEvent) === 'finished' ? '1' : '0').'" data-reels-created="'.$reelsCreated.'" data-reels-allowed="'.$reelsAllowed.'" data-reels-unlimited="'.(int)($currentEvent['reels_unlimited'] ?? 0).'" data-reel-duration="'.(int)($currentEvent['reel_duration_seconds'] ?? 30).'" data-reel-images="'.(int)($currentEvent['reel_image_count'] ?? 20).'">Create Presentation QR</button></p>';
         $html = preg_replace('~(<div class="copyline">.*?</div>)~s', '$1'.$downloadButton, $html, 1) ?? $html;
         if (is_admin($currentUser) && preg_match('~<div class="event-admin-danger">\s*(<button[^>]*data-delete-event-open[^>]*>.*?</button>)\s*</div>~s', $html, $deleteMatch)) {
             $deleteButton = $deleteMatch[1];
@@ -55,10 +55,12 @@ ob_start(static function (string $html): string {
             $archivedAlbum = '<section class="card archived-album"><div><div class="eyebrow">Saved event album</div><h2>Photo album archive</h2><p class="muted">The original event photos have expired. Your last generated offline album remains available.</p></div><div class="actions"><a class="button" href="?action=download_photo_album&amp;event_id='.$eventId.'">Download photo album</a><button class="button light album-share" type="button" data-event-id="'.$eventId.'">Copy shareable album link</button></div></section>';
             $html = preg_replace('~<div class="empty">No photos yet\..*?</div>~s', $archivedAlbum, $html, 1) ?? $html;
         }
+        $albumLibrary=album_job_section_html($currentEvent);
+        $html=preg_replace('~</section></main>~', '</section>'.$albumLibrary.'</main>', $html, 1)??$html;
     }
     return str_replace(
         ['</head>','</body>'],
-        ['<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png?v=1"><link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png?v=1"><link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png?v=1"><link rel="shortcut icon" href="assets/favicon.ico?v=1"><link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=1"><link rel="stylesheet" href="assets/responsive.css?v=21"><link rel="stylesheet" href="assets/hero.css?v=1"><link rel="stylesheet" href="assets/dashboard.css?v=2"><link rel="stylesheet" href="assets/reel.css?v=2"><link rel="stylesheet" href="assets/how.css?v=1"><link rel="stylesheet" href="assets/admin.css?v=1"><link rel="stylesheet" href="assets/toast.css?v=1"><link rel="stylesheet" href="assets/event-admin.css?v=2"></head>','<script src="assets/toast.js?v=1"></script><script src="assets/reel.js?v=3"></script><script src="assets/gallery.js?v=17"></script><script src="assets/presentation-qr.js?v=2"></script><script src="assets/event-admin.js?v=2"></script></body>'],
+        ['<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png?v=1"><link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png?v=1"><link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png?v=1"><link rel="shortcut icon" href="assets/favicon.ico?v=1"><link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=1"><link rel="stylesheet" href="assets/responsive.css?v=22"><link rel="stylesheet" href="assets/hero.css?v=1"><link rel="stylesheet" href="assets/dashboard.css?v=2"><link rel="stylesheet" href="assets/reel.css?v=2"><link rel="stylesheet" href="assets/how.css?v=1"><link rel="stylesheet" href="assets/admin.css?v=1"><link rel="stylesheet" href="assets/toast.css?v=1"><link rel="stylesheet" href="assets/event-admin.css?v=2"></head>','<script src="assets/toast.js?v=1"></script><script src="assets/reel.js?v=3"></script><script src="assets/gallery.js?v=19"></script><script src="assets/presentation-qr.js?v=2"></script><script src="assets/event-admin.js?v=2"></script></body>'],
         $html
     );
 });
@@ -86,10 +88,29 @@ if ($action === 'download_photo_album') {
     $coverDataUri=null;
     if($_SERVER['REQUEST_METHOD']==='POST'){
         check_csrf();
+        if(event_day_status($event)!=='finished'){http_response_code(409);exit('Photo albums can only be created after the event has finished.');}
         try{$coverDataUri=album_cover_upload_data_uri($_FILES['album_cover']??[]);}
         catch(Throwable $e){http_response_code(400);exit($e->getMessage());}
     }
     download_photo_album($event,false,$coverDataUri);
+}
+if ($action === 'album_job_status') {
+    header('Content-Type: application/json');$u=require_user();$event=event_for_owner((int)($_GET['event_id']??0),(int)$u['id']);
+    if(!$event){http_response_code(404);echo json_encode(['error'=>'Event not found.']);exit;}
+    $job=album_job_for_event((int)$event['id']);echo json_encode(['job'=>$job],JSON_UNESCAPED_SLASHES);exit;
+}
+if ($action === 'download_album_volume') {
+    $u=require_user();$event=event_for_owner((int)($_GET['event_id']??0),(int)$u['id']);$volumeNumber=max(1,(int)($_GET['volume']??0));$job=$event?album_job_for_event((int)$event['id']):null;
+    $volume=$job?array_values(array_filter($job['volumes'],static fn(array $item):bool=>(int)$item['volume_number']===$volumeNumber&&$item['status']==='ready')):[];$path=$event&&$volume?album_volume_path((int)$event['id'],$volumeNumber):'';
+    if(!$event||!$volume||!is_file($path)){http_response_code(404);exit('Album volume not found.');}
+    if(ob_get_level())ob_end_clean();$base=preg_replace('/[^A-Za-z0-9_-]+/','-',trim((string)$event['title']));header('Content-Type: text/html; charset=UTF-8');header('Content-Disposition: attachment; filename="'.$base.'-album-'.str_pad((string)$volumeNumber,2,'0',STR_PAD_LEFT).'.html"');header('Content-Length: '.filesize($path));header('Cache-Control: private, no-store');readfile($path);exit;
+}
+if ($action === 'download_all_albums') {
+    $u=require_user();$event=event_for_owner((int)($_GET['event_id']??0),(int)$u['id']);$job=$event?album_job_for_event((int)$event['id']):null;
+    if(!$event||!$job||$job['status']!=='completed'){http_response_code(409);exit('The complete album set is not ready yet.');}if(!class_exists('ZipArchive')){http_response_code(500);exit('ZIP downloads are not enabled on this server.');}
+    $temporary=tempnam(sys_get_temp_dir(),'pov-albums-');if($temporary===false){http_response_code(500);exit('The album ZIP could not be prepared.');}unlink($temporary);$zipPath=$temporary.'.zip';$zip=new ZipArchive();if($zip->open($zipPath,ZipArchive::CREATE)!==true){http_response_code(500);exit('The album ZIP could not be created.');}
+    $base=preg_replace('/[^A-Za-z0-9_-]+/','-',trim((string)$event['title']));foreach($job['volumes'] as $volume){$path=album_volume_path((int)$event['id'],(int)$volume['volume_number']);if($volume['status']==='ready'&&is_file($path))$zip->addFile($path,$base.'-album-'.str_pad((string)$volume['volume_number'],2,'0',STR_PAD_LEFT).'.html');}$zip->close();
+    if(ob_get_level())ob_end_clean();header('Content-Type: application/zip');header('Content-Disposition: attachment; filename="'.$base.'-photo-albums.zip"');header('Content-Length: '.filesize($zipPath));header('Cache-Control: private, no-store');readfile($zipPath);unlink($zipPath);exit;
 }
 if ($action === 'shared_album_link') {
     header('Content-Type: application/json');
@@ -147,6 +168,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     check_csrf();
+    if ($action === 'create_album_job') {
+        header('Content-Type: application/json');$u=require_user();$event=event_for_owner((int)($_POST['event_id']??0),(int)$u['id']);
+        if(!$event){http_response_code(404);echo json_encode(['error'=>'Event not found.']);exit;}if((int)($event['photo_albums_allowed']??1)<1){http_response_code(403);echo json_encode(['error'=>'Photo albums are not included with this event plan.']);exit;}
+        if(event_day_status($event)!=='finished'){http_response_code(409);echo json_encode(['error'=>'Photo albums can only be created after the event has finished.']);exit;}
+        try{$cover=album_cover_upload_data_uri($_FILES['album_cover']??[]);$job=queue_album_job($event,$cover);echo json_encode(['ok'=>true,'job'=>$job]);}
+        catch(Throwable $e){http_response_code(400);echo json_encode(['error'=>$e->getMessage()]);}exit;
+    }
+    if ($action === 'process_album_job') {
+        header('Content-Type: application/json');$u=require_user();$event=event_for_owner((int)($_POST['event_id']??0),(int)$u['id']);if(!$event){http_response_code(404);echo json_encode(['error'=>'Event not found.']);exit;}
+        process_album_jobs(1,(int)$event['id']);echo json_encode(['job'=>album_job_for_event((int)$event['id'])]);exit;
+    }
     if ($action === 'delete_photo') {
         $wantsJson=str_contains($_SERVER['HTTP_ACCEPT']??'','application/json') || ($_SERVER['HTTP_X_REQUESTED_WITH']??'')==='XMLHttpRequest';
         $u=require_user(); $event=event_for_owner((int)($_POST['event_id']??0),(int)$u['id']);
@@ -159,6 +191,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$photo) throw new RuntimeException('That photo is no longer available.');
             $savedAlbum=album_storage_path((int)$event['id']);
             if (is_file($savedAlbum) && !unlink($savedAlbum)) throw new RuntimeException('The saved album could not be invalidated. Please try again.');
+            clear_album_volume_files((int)$event['id']);delete_album_job_records((int)$event['id']);
             $path=__DIR__.'/uploads/'.$event['id'].'/'.basename($photo['file_name']);
             if (is_file($path) && !unlink($path)) throw new RuntimeException('The photo file could not be erased from the server.');
             db()->prepare('DELETE FROM photos WHERE id=?')->execute([$photo['id']]);
@@ -382,6 +415,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $locked->execute([$event['id'],$admin['id']]);
             if(!$locked->fetchColumn()) throw new RuntimeException('This event is no longer available.');
             remove_event_storage((int)$event['id']);
+            delete_album_job_records((int)$event['id']);
             db()->prepare('DELETE FROM events WHERE id=? AND user_id=?')->execute([$event['id'],$admin['id']]);
             db()->commit();
             flash('success','The event, all captured images, and its saved photo album were permanently deleted.');
