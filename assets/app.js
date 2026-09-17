@@ -271,7 +271,6 @@
   }
 
   async function addWatermark(blob, caption, orientation) {
-    await watermarkLogoReady;
     const bitmap = await createImageBitmap(blob);
     const portrait = orientation !== 'landscape';
     const targetRatio = portrait ? 3 / 4 : 4 / 3;
@@ -297,6 +296,7 @@
       if (!cleanPhoto) throw new Error('The photo could not be prepared.');
       return cleanPhoto;
     }
+    await watermarkLogoReady;
     const fontSize = Math.max(22, Math.min(54, Math.round(canvas.width * .035)));
     const padding = Math.round(fontSize * .7);
     context.font = `700 ${fontSize}px system-ui, sans-serif`;
