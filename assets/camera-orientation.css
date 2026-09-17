@@ -1,0 +1,9 @@
+/* Keep the capture preview and controls visible if a browser rotates despite the portrait-lock request. */
+@media (orientation: landscape) and (max-height: 650px) {
+  .camera-page .camera-shell { width: min(100%, 920px); padding: 8px 12px; }
+  .camera-page .camera-top { margin-bottom: 6px; }
+  .camera-page .camera { height: calc(100dvh - 60px); width: auto; max-width: 100%; margin: 0 auto; }
+  .camera-page .camera-controls { bottom: 9px; gap: 16px; }
+  .camera-page .shutter { width: 58px; height: 58px; }
+  .camera-page .switch { width: 38px; height: 38px; }
+}

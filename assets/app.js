@@ -12,7 +12,6 @@
   const canvas = camera.querySelector('canvas');
   const capture = camera.querySelector('[data-capture]');
   const switchButton = camera.querySelector('[data-switch]');
-  const orientationButton = camera.querySelector('[data-orientation]');
   const status = document.querySelector('[data-status]');
   const strip = document.querySelector('[data-strip]');
   const fileCamera = camera.querySelector('[data-file-camera]');
@@ -62,6 +61,7 @@
   const token = camera.dataset.token;
   let facingMode = 'environment';
   let captureOrientation = 'portrait';
+  let lastSensorReading = 0;
   let stream;
   let imageCapture = null;
   let remaining = Number(camera.dataset.remaining || 5);
@@ -74,6 +74,48 @@
   let pendingPreviewUrl = '';
   let previewTimer = null;
   let cameraRequestId = 0;
+  function setCaptureOrientation(orientation, fromSensor = false) {
+    captureOrientation = orientation;
+    camera.style.aspectRatio = orientation === 'landscape' ? '4 / 3' : '3 / 4';
+    if (fromSensor) lastSensorReading = Date.now();
+  }
+  function screenOrientationFallback() {
+    if (Date.now() - lastSensorReading < 1500) return;
+    const angle = screen.orientation?.angle ?? window.orientation;
+    setCaptureOrientation(angle === 90 || angle === -90 || angle === 270 || innerWidth > innerHeight ? 'landscape' : 'portrait');
+  }
+  window.addEventListener('deviceorientation', event => {
+    const beta = Math.abs(event.beta ?? 0), gamma = Math.abs(event.gamma ?? 0);
+    if (gamma >= 55 && gamma > beta + 15) setCaptureOrientation('landscape', true);
+    else if (beta >= 55 && beta > gamma + 15) setCaptureOrientation('portrait', true);
+  });
+  window.addEventListener('devicemotion', event => {
+    const gravity = event.accelerationIncludingGravity;
+    if (!gravity) return;
+    const x = Math.abs(gravity.x ?? 0), y = Math.abs(gravity.y ?? 0);
+    if (x >= 6 && x > y + 2) setCaptureOrientation('landscape', true);
+    else if (y >= 6 && y > x + 2) setCaptureOrientation('portrait', true);
+  });
+  window.addEventListener('orientationchange', () => setTimeout(screenOrientationFallback, 100));
+  screen.orientation?.addEventListener?.('change', screenOrientationFallback);
+  window.addEventListener('resize', screenOrientationFallback);
+  screenOrientationFallback();
+  async function requestOrientationAccess() {
+    try {
+      const permissions = [];
+      if (typeof window.DeviceOrientationEvent?.requestPermission === 'function') permissions.push(window.DeviceOrientationEvent.requestPermission());
+      if (typeof window.DeviceMotionEvent?.requestPermission === 'function') permissions.push(window.DeviceMotionEvent.requestPermission());
+      await Promise.allSettled(permissions);
+    } catch (_) { /* Motion access is optional. */ }
+    try { await screen.orientation?.lock?.('portrait'); }
+    catch (_) { /* Ordinary browser tabs may not permit orientation locking. */ }
+  }
+  async function photoOrientation(blob) {
+    const bitmap = await createImageBitmap(blob);
+    const orientation = bitmap.width > bitmap.height ? 'landscape' : 'portrait';
+    bitmap.close?.();
+    return orientation;
+  }
   const watermarkLogo = new Image();
   watermarkLogo.src = 'assets/povents-logo.png?v=5';
   const watermarkLogoReady = new Promise((resolve, reject) => {
@@ -371,6 +413,7 @@
   });
 
   capture.addEventListener('click', async () => {
+    requestOrientationAccess();
     if (remaining < 1) return;
     if (nativeCapture) {
       openPhoneCamera();
@@ -396,13 +439,13 @@
       blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 1));
     }
     if (facingMode === 'user') blob = await mirrorPhoto(blob);
-    review(blob);
+    review(blob, '', captureOrientation);
   });
 
   fileCamera.addEventListener('change', async () => {
     if (fileCamera.files?.[0]) {
       const photo = facingMode === 'user' ? await mirrorPhoto(fileCamera.files[0]) : fileCamera.files[0];
-      review(photo);
+      review(photo, '', await photoOrientation(photo));
     }
     fileCamera.value = '';
     resumePreviewAfterPhoneCamera();
@@ -418,19 +461,6 @@
     facingMode = facingMode === 'environment' ? 'user' : 'environment';
     start();
   });
-  function applyCaptureOrientation(announce = false) {
-    const landscape = captureOrientation === 'landscape';
-    camera.style.aspectRatio = landscape ? '4 / 3' : '3 / 4';
-    orientationButton.textContent = landscape ? '▯' : '▭';
-    orientationButton.setAttribute('aria-label', landscape ? 'Switch to portrait photo' : 'Switch to landscape photo');
-    orientationButton.title = landscape ? 'Landscape photo selected' : 'Portrait photo selected';
-    if (announce) setStatus(`${landscape ? 'Landscape' : 'Portrait'} photo selected · ${remaining} remaining`);
-  }
-  orientationButton?.addEventListener('click', () => {
-    captureOrientation = captureOrientation === 'portrait' ? 'landscape' : 'portrait';
-    applyCaptureOrientation(true);
-  });
-  applyCaptureOrientation(false);
   window.addEventListener('pagehide', () => {
     cameraRequestId++;
     if (stream) stream.getTracks().forEach(track => track.stop());
@@ -475,6 +505,7 @@
     accept.addEventListener('click', () => {
       if (!check.checked) return;
       try { sessionStorage.setItem(consentKey, 'accepted'); } catch (_) {}
+      requestOrientationAccess();
       consent.remove(); document.body.style.overflow = ''; start();
     });
     consent.querySelector('[data-consent-leave]').addEventListener('click', () => {
