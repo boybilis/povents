@@ -77,8 +77,24 @@
   function setCaptureOrientation(orientation, fromSensor = false) {
     captureOrientation = orientation;
     camera.dataset.captureOrientation = orientation;
-    camera.style.aspectRatio = orientation === 'landscape' ? '4 / 3' : '3 / 4';
     if (fromSensor) lastSensorReading = Date.now();
+  }
+  function showOrientationReminder() {
+    const reminder = document.createElement('section');
+    reminder.className = 'orientation-reminder';
+    reminder.setAttribute('role', 'dialog');
+    reminder.setAttribute('aria-modal', 'true');
+    reminder.setAttribute('aria-labelledby', 'orientation-reminder-title');
+    reminder.innerHTML = '<div class="orientation-reminder__panel"><div class="eyebrow">Before you begin</div><h2 id="orientation-reminder-title">Lock your phone orientation</h2><p>Turn on your phone’s rotation lock before taking photos. The camera preview will stay the same shape; turn the phone sideways for a landscape photo.</p><button type="button">Continue to camera</button></div>';
+    document.body.appendChild(reminder);
+    document.body.style.overflow = 'hidden';
+    const continueButton = reminder.querySelector('button');
+    continueButton.addEventListener('click', () => {
+      reminder.remove();
+      document.body.style.overflow = '';
+      start();
+    });
+    continueButton.focus();
   }
   function screenOrientationFallback() {
     if (Date.now() - lastSensorReading < 1500) return;
@@ -507,7 +523,8 @@
       if (!check.checked) return;
       try { sessionStorage.setItem(consentKey, 'accepted'); } catch (_) {}
       requestOrientationAccess();
-      consent.remove(); document.body.style.overflow = ''; start();
+      consent.remove();
+      showOrientationReminder();
     });
     consent.querySelector('[data-consent-leave]').addEventListener('click', () => {
       cameraRequestId++;
