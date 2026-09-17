@@ -61,6 +61,7 @@
   const token = camera.dataset.token;
   let facingMode = 'environment';
   let captureOrientation = 'portrait';
+  let landscapeRotation = -Math.PI / 2;
   let lastSensorReading = 0;
   let stream;
   let imageCapture = null;
@@ -103,14 +104,14 @@
   }
   window.addEventListener('deviceorientation', event => {
     const beta = Math.abs(event.beta ?? 0), gamma = Math.abs(event.gamma ?? 0);
-    if (gamma >= 55 && gamma > beta + 15) setCaptureOrientation('landscape', true);
+    if (gamma >= 55 && gamma > beta + 15) { landscapeRotation = event.gamma >= 0 ? -Math.PI / 2 : Math.PI / 2; setCaptureOrientation('landscape', true); }
     else if (beta >= 55 && beta > gamma + 15) setCaptureOrientation('portrait', true);
   });
   window.addEventListener('devicemotion', event => {
     const gravity = event.accelerationIncludingGravity;
     if (!gravity) return;
     const x = Math.abs(gravity.x ?? 0), y = Math.abs(gravity.y ?? 0);
-    if (x >= 6 && x > y + 2) setCaptureOrientation('landscape', true);
+    if (x >= 6 && x > y + 2) { landscapeRotation = gravity.x >= 0 ? -Math.PI / 2 : Math.PI / 2; setCaptureOrientation('landscape', true); }
     else if (y >= 6 && y > x + 2) setCaptureOrientation('portrait', true);
   });
   window.addEventListener('orientationchange', () => setTimeout(screenOrientationFallback, 100));
@@ -249,6 +250,24 @@
     context.restore();
     bitmap.close?.();
     return await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 1));
+  }
+
+  async function orientBrowserPhoto(blob, orientation, rotation) {
+    const bitmap = await createImageBitmap(blob);
+    const needsRotation = orientation === 'landscape' ? bitmap.height > bitmap.width : bitmap.width > bitmap.height;
+    if (!needsRotation) { bitmap.close?.(); return blob; }
+    canvas.width = bitmap.height;
+    canvas.height = bitmap.width;
+    const context = canvas.getContext('2d');
+    context.save();
+    context.translate(canvas.width / 2, canvas.height / 2);
+    context.rotate(rotation);
+    context.drawImage(bitmap, -bitmap.width / 2, -bitmap.height / 2);
+    context.restore();
+    bitmap.close?.();
+    const rotated = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 1));
+    if (!rotated) throw new Error('The camera photo could not be rotated. Please retake it.');
+    return rotated;
   }
 
   async function addWatermark(blob, caption, orientation) {
@@ -441,22 +460,28 @@
       openPhoneCamera();
       return;
     }
+    const shotOrientation = captureOrientation;
+    const shotRotation = landscapeRotation;
     capture.disabled = true;
-    let blob = null;
-    if (imageCapture) {
-      try {
-        const fullResolution = await imageCapture.takePhoto();
-        blob = fullResolution;
-      } catch (_) {}
+    try {
+      let blob = null;
+      if (imageCapture) {
+        try { blob = await imageCapture.takePhoto(); } catch (_) {}
+      }
+      if (!blob) {
+        canvas.width = Math.min(video.videoWidth, 2400);
+        canvas.height = Math.round(canvas.width * video.videoHeight / video.videoWidth);
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+        blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 1));
+      }
+      if (!blob) throw new Error('The camera photo could not be captured. Please try again.');
+      if (facingMode === 'user') blob = await mirrorPhoto(blob);
+      blob = await orientBrowserPhoto(blob, shotOrientation, shotRotation);
+      review(blob, '', shotOrientation);
+    } catch (error) {
+      capture.disabled = remaining < 1;
+      setStatus(error.message || 'The camera photo could not be prepared. Please try again.', true);
     }
-    if (!blob) {
-      canvas.width = Math.min(video.videoWidth, 2400);
-      canvas.height = Math.round(canvas.width * video.videoHeight / video.videoWidth);
-      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-      blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 1));
-    }
-    if (facingMode === 'user') blob = await mirrorPhoto(blob);
-    review(blob, '', captureOrientation);
   });
 
   fileCamera.addEventListener('change', async () => {
