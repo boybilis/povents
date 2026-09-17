@@ -30,6 +30,7 @@
   const metadataSource=document.querySelector('.presentation-qr-create');
   const eventFinished=metadataSource?.dataset.eventFinished==='1';
   const reelsAllowed=Number(metadataSource?.dataset.reelsAllowed||3),reelDuration=Number(metadataSource?.dataset.reelDuration||30),reelImages=Number(metadataSource?.dataset.reelImages||20);
+  const reelMinImages=10,reelMaxImages=Math.min(20,Math.max(reelMinImages,reelImages));
   const unlimitedReels=metadataSource?.dataset.reelsUnlimited==='1';
   toolbar.innerHTML = `<input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="event_id" value="${eventId || ''}"><input type="hidden" name="all_photos" value="1" data-all-photos disabled><label><input type="checkbox" data-select-all> Select all photos</label><span data-selected>0 selected</span><button type="submit" disabled>Download ZIP</button><button class="button light reel-create" type="button" data-reel-create disabled>Create ${reelDuration}s Reel</button><button class="button light album-create" type="button" ${eventFinished?'':'disabled'} title="${eventFinished?'Create the offline photo album set':'Photo album creation unlocks after the event ends.'}">Create Photo Album</button><button class="button light slideshow-create" type="button">Play Slideshow</button>`;
   document.querySelector('.gallery').before(toolbar);
@@ -246,9 +247,9 @@
     selectedLabel.textContent = `${count} selected`;
     downloadButton.disabled = count === 0;
     const reelsRemaining = unlimitedReels ? -1 : Math.max(0, reelsAllowed - reelsCreated);
-    reelButton.disabled = (!unlimitedReels && reelsRemaining === 0) || count !== reelImages;
+    reelButton.disabled = (!unlimitedReels && reelsRemaining === 0) || count < reelMinImages || count > reelMaxImages;
     reelButton.textContent = reelsAllowed===0&&!unlimitedReels?'Reels not included':(!unlimitedReels&&reelsRemaining===0?`All ${reelsAllowed} reels created`:`Create ${reelDuration}s Reel${unlimitedReels?' · Unlimited':` · ${reelsRemaining} left`}`);
-    reelButton.title = reelsAllowed===0&&!unlimitedReels?'Video reels are not included with this event plan':(!unlimitedReels&&reelsRemaining===0?'All reels included with this event plan have been used':(count < reelImages ? `Select ${reelImages-count} more photo${reelImages-count===1?'':'s'}` : (count > reelImages ? `Unselect ${count-reelImages} photo${count-reelImages===1?'':'s'}` : `Create a ${reelDuration}-second reel using these ${reelImages} photos`)));
+    reelButton.title = reelsAllowed===0&&!unlimitedReels?'Video reels are not included with this event plan':(!unlimitedReels&&reelsRemaining===0?'All reels included with this event plan have been used':(count < reelMinImages ? `Select ${reelMinImages-count} more photo${reelMinImages-count===1?'':'s'} (minimum ${reelMinImages})` : (count > reelMaxImages ? `Unselect ${count-reelMaxImages} photo${count-reelMaxImages===1?'':'s'} (maximum ${reelMaxImages})` : `Create a ${reelDuration}-second reel using these ${count} photos`)));
     selectAll.checked = checks.length > 0 && count === checks.length;
     selectAll.indeterminate = count > 0 && count < checks.length;
     allPhotos.disabled = !selectAll.checked;
@@ -260,7 +261,7 @@
   }
   checks.forEach((check,index) => check.addEventListener('change',()=>{const url=links[index].href;if(check.checked&&!selectionOrder.includes(url))selectionOrder.push(url);if(!check.checked)selectionOrder=selectionOrder.filter(item=>item!==url);updateSelection();}));
   selectAll.addEventListener('change',() => { checks.forEach(check => { check.checked = selectAll.checked; }); selectionOrder=selectAll.checked?links.map(link=>link.href):[]; updateSelection(); });
-  reelButton.addEventListener('click',()=>{if(!unlimitedReels&&reelsCreated>=reelsAllowed)return;const selected=selectionOrder.filter(url=>links.some((link,index)=>link.href===url&&checks[index]?.checked));window.POVentsReel?.open({images:selected,title:metadataSource?.dataset.eventTitle||document.querySelector('.dash-head h1')?.textContent||'POVents Event',date:metadataSource?.dataset.eventDate||'',time:metadataSource?.dataset.eventTime||'',eventId,csrf,duration:reelDuration,imageCount:reelImages});});
+  reelButton.addEventListener('click',()=>{if(!unlimitedReels&&reelsCreated>=reelsAllowed)return;const selected=selectionOrder.filter(url=>links.some((link,index)=>link.href===url&&checks[index]?.checked));window.POVentsReel?.open({images:selected,title:metadataSource?.dataset.eventTitle||document.querySelector('.dash-head h1')?.textContent||'POVents Event',date:metadataSource?.dataset.eventDate||'',time:metadataSource?.dataset.eventTime||'',eventId,csrf,duration:reelDuration,minImageCount:reelMinImages,maxImageCount:reelMaxImages});});
   document.addEventListener('povents:reel-created',event=>{if(!unlimitedReels)reelsCreated=reelsAllowed-Number(event.detail?.remaining??Math.max(0,reelsAllowed-reelsCreated-1));updateSelection();});
   pagePrevious.addEventListener('click', () => renderPage(currentPage - 1));
   pageNext.addEventListener('click', () => renderPage(currentPage + 1));
