@@ -1,4 +1,26 @@
 /* Keep the capture preview and controls visible if a browser rotates despite the portrait-lock request. */
+.camera-page .camera[data-capture-orientation="landscape"] .camera-controls {
+  inset: 0 0 0 auto;
+  width: 86px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, .52));
+}
+.camera-page .camera[data-capture-orientation="landscape"] .camera-controls .shutter {
+  order: -1;
+  width: 62px;
+  height: 62px;
+  flex: 0 0 62px;
+}
+.camera-page .camera[data-capture-orientation="landscape"] .camera-controls .switch {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+}
 @media (orientation: landscape) and (max-height: 650px) {
   .camera-page .camera-shell { width: min(100%, 920px); padding: 8px 12px; }
   .camera-page .camera-top { margin-bottom: 6px; }
@@ -6,4 +28,7 @@
   .camera-page .camera-controls { bottom: 9px; gap: 16px; }
   .camera-page .shutter { width: 58px; height: 58px; }
   .camera-page .switch { width: 38px; height: 38px; }
+  .camera-page .camera[data-capture-orientation="landscape"] .camera-controls { width: 70px; gap: 8px; padding: 6px; }
+  .camera-page .camera[data-capture-orientation="landscape"] .camera-controls .shutter { width: 54px; height: 54px; flex-basis: 54px; }
+  .camera-page .camera[data-capture-orientation="landscape"] .camera-controls .switch { width: 36px; height: 36px; flex-basis: 36px; }
 }

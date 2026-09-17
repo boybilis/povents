@@ -76,6 +76,7 @@
   let cameraRequestId = 0;
   function setCaptureOrientation(orientation, fromSensor = false) {
     captureOrientation = orientation;
+    camera.dataset.captureOrientation = orientation;
     camera.style.aspectRatio = orientation === 'landscape' ? '4 / 3' : '3 / 4';
     if (fromSensor) lastSensorReading = Date.now();
   }
